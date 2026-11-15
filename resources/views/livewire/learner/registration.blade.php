@@ -21,7 +21,6 @@ state([
     'current_step' => 1,
     'institution_id' => null,
     'course_id' => null,
-    'uli_number' => '',
     'entry_date' => now()->toDateString(),
     'last_name' => '',
     'first_name' => '',
@@ -96,7 +95,7 @@ mount(function (): void {
 
     if ($profile) {
         $this->fill($profile->only([
-            'institution_id', 'course_id', 'uli_number', 'entry_date', 'last_name', 'first_name', 'middle_name', 'extension_name',
+            'institution_id', 'course_id', 'entry_date', 'last_name', 'first_name', 'middle_name', 'extension_name',
             'address_line', 'barangay', 'district', 'city_municipality', 'province', 'region',
             'contact_number', 'nationality', 'sex', 'civil_status', 'employment_status',
             'employment_type', 'birthplace_city', 'birthplace_province', 'birthplace_region',
@@ -157,7 +156,6 @@ $nextStep = function (): void {
 
     $rules = match ((int) $this->current_step) {
         1 => [
-            'uli_number' => ['nullable', 'string', 'max:40'],
             'entry_date' => ['required', 'date'],
             'last_name' => ['required', 'string', 'max:100'],
             'first_name' => ['required', 'string', 'max:100'],
@@ -257,7 +255,6 @@ $save = function (): void {
     $requiresMarriageContract = $this->civil_status === 'Married';
 
     $validated = $this->validate([
-        'uli_number' => ['nullable', 'string', 'max:40'],
         'entry_date' => ['required', 'date'],
         'institution_id' => ['required', Rule::exists('institutions', 'id')->where('is_active', true)],
         'course_id' => [
@@ -624,9 +621,9 @@ if ($oldDocumentPaths !== []) {
                 <div class="rounded-xl border border-cyan-100 bg-cyan-50/60 p-4">
                     <p class="text-sm font-bold text-cyan-900">T2MIS Learner Information</p>
                     <div class="mt-3 grid gap-4 sm:grid-cols-2">
-                        <flux:input wire:model="uli_number" label="Unique Learner Identifier (ULI) Number" placeholder="Encoder: enter the ULI number" />
                         <flux:input wire:model="entry_date" type="date" label="Entry Date" required />
                     </div>
+                    <p class="mt-3 text-xs text-cyan-800">The ULI Number will be assigned by the Registrar or Administrator after registration.</p>
                 </div>
                 <div class="mt-6">
                     <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">Complete Name</h3>
@@ -708,7 +705,6 @@ if ($oldDocumentPaths !== []) {
                 <flux:heading size="lg">7. Privacy Consent, Disclaimer &amp; Review</flux:heading>
                 <p class="mt-3 text-sm leading-6 text-emerald-900/75">I hereby attest that the information stated in this Learners Profile is true and correct. I have read and understood the TESDA Privacy Notice and consent to the processing of my personal information for training-related programs.</p>
                 <dl class="mt-5 grid gap-4 rounded-xl border border-emerald-100 bg-white p-5 text-sm sm:grid-cols-2">
-                    <div><dt class="text-slate-500">ULI Number</dt><dd class="mt-1 font-bold text-slate-900">{{ $uli_number ?: 'Not yet issued' }}</dd></div>
                     <div><dt class="text-slate-500">Entry Date</dt><dd class="mt-1 font-bold text-slate-900">{{ $entry_date ?: 'Not completed' }}</dd></div>
                     <div><dt class="text-slate-500">Learner</dt><dd class="mt-1 font-bold text-slate-900">{{ trim($first_name.' '.$middle_name.' '.$last_name.' '.$extension_name) ?: 'Not completed' }}</dd></div>
                     <div><dt class="text-slate-500">Contact Number</dt><dd class="mt-1 font-bold text-slate-900">{{ $contact_number ?: 'Not completed' }}</dd></div>

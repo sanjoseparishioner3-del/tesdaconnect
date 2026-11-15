@@ -1,51 +1,38 @@
-# TESDA Connect course and competency seeders
+# ULI Management implementation patch
 
-This package contains:
+This patch adds Registrar + Administrator ULI assignment to the existing Master Student List.
 
-- `CoursesSeeder.php` — creates or updates Organic Agriculture Production NC I for institution ID 2.
-- `CompetencyUnitsAndTasksSeeder.php` — creates or updates the 6 competency units and 43 tasks from the supplied SQL data. It finds the course using institution ID 2 + course code `OAP-NC-II`, so it does not depend on a hardcoded course primary key.
-
-## Important prerequisite
-
-The `institutions` table must already contain institution ID `2`. This package does not create an institution record.
+## Included
+- `resources/views/livewire/learner/registration.blade.php` — registration form without learner-entered ULI.
+- `resources/views/livewire/registrar/student-records.blade.php`
+  - Assign ULI action and modal.
+  - ULI status and displayed number.
+  - Role checks in both Livewire actions.
+  - Duplicate validation and activity log with old/new ULI, actor, timestamp, and an optional reason/reference.
+- `database/migrations/2026_11_11_000000_add_uli_assignment_tracking_to_learner_profiles.php`
+  - Adds assignment timestamp and assigned-by user.
+  - Adds unique constraint to `uli_number`.
+- `routes/web.php`
+  - Adds `/system/student-records` for Administrator, reusing the same records screen.
+  - Existing `/registrar/student-records` remains Registrar-only.
 
 ## Install
+1. Back up the existing files.
+2. Copy the included files to the matching project paths, merging the added route into your current `routes/web.php` if that file has changed since this source export.
+3. Run:
+   `php artisan migrate`
+4. Clear caches:
+   `php artisan optimize:clear`
 
-Copy both PHP files into your Laravel project's `database/seeders/` directory.
+## Access
+- Registrar: `/registrar/student-records`
+- Administrator: `/system/student-records`
 
-In `database/seeders/DatabaseSeeder.php`, call them in this order:
+The current screen limits staff records to their assigned institutions; `InstitutionScope` returns all institutions for Administrator.
+The ULI is stored in the existing `learner_profiles.uli_number` column. The migration adds audit metadata and uniqueness.
 
-```php
-$this->call([
-    CoursesSeeder::class,
-    CompetencyUnitsAndTasksSeeder::class,
-]);
-```
-
-If your institutions are also created by a seeder, call that seeder before `CoursesSeeder`.
-
-Then run:
-
-```bash
-php artisan db:seed
-```
-
-Or run individually, in order:
-
-```bash
-php artisan db:seed --class=CoursesSeeder
-php artisan db:seed --class=CompetencyUnitsAndTasksSeeder
-```
-
-Both seeders use update-or-insert behavior based on the table's natural unique keys. They do not delete unrelated courses, units, or tasks.
-
-## Course record included
-
-- Institution ID: `2`
-- Course code: `OAP-NC-II`
-- Course name: `Organic Agriculture Production NC I`
-- Qualification level: `NC II`
-- Training hours: `232`
-- Active: `1`
-
-The course's ID is assigned by the database. The competency seeder looks it up by institution ID and course code.
+## Important notes
+- Existing duplicate non-empty ULI values must be resolved before running the migration's unique index.
+- The UI action is available for enrollment records that have a linked learner account/profile.
+- Activity log records assignment/update reason, previous and new ULI, learner profile ID, actor (via activity_logs.user_id), and time (activity_logs timestamps).
+- Test the role access and save flow in a development database before production deployment.

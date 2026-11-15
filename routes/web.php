@@ -88,6 +88,11 @@ Volt::route('competency-progress', 'progress.competency')
     ->middleware('role:administrator')
     ->name('system.courses');
 
+
+    Volt::route('system/student-records', 'registrar.student-records')
+        ->middleware('role:administrator')
+        ->name('system.student-records');
+
     Volt::route('system/activity', 'system.activity')
         ->middleware('role:administrator')
         ->name('system.activity');

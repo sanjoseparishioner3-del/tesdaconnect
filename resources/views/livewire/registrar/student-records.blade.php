@@ -19,6 +19,7 @@ state([
     'search' => '', 'status' => request()->query('status', 'active'), 'institutionFilter' => '',
     'editingId' => null, 'editName' => '', 'editEmail' => '', 'editPhone' => '', 'editCourseId' => '', 'editBatchId' => '', 'editReason' => '',
     'archiveId' => null, 'archiveReason' => '', 'viewingId' => null,
+    'uliProfileId' => null, 'uliNumber' => '', 'uliReason' => '',
 ]);
 $institutionIds = computed(fn () => InstitutionScope::idsFor(auth()->user()));
 $institutions = computed(fn () => \App\Models\Institution::query()->whereIn('id', $this->institutionIds)->orderBy('name')->get());
@@ -98,6 +99,64 @@ $restore = function (int $id): void {
     ActivityLogger::record('student_record_restored','Restored archived enrollment record.',(int)$record->institution_id,['enrollment_id'=>$record->id]);
     unset($this->records); Flux::toast(variant:'success',text:'Record restored to the active list.');
 };
+
+$assignUli = function (int $id): void {
+    abort_unless(auth()->user()->hasRole('administrator', 'registrar'), 403);
+
+    $record = EnrollmentApplication::query()
+        ->whereIn('institution_id', $this->institutionIds)
+        ->whereNull('archived_at')
+        ->findOrFail($id);
+
+    abort_unless($record->learner_user_id, 422, 'This enrollment has no linked learner account.');
+
+    $profile = LearnerProfile::query()
+        ->where('user_id', $record->learner_user_id)
+        ->where('institution_id', $record->institution_id)
+        ->firstOrFail();
+
+    $this->uliProfileId = $profile->id;
+    $this->uliNumber = (string) ($profile->uli_number ?? '');
+    $this->uliReason = '';
+};
+
+$saveUli = function (): void {
+    abort_unless(auth()->user()->hasRole('administrator', 'registrar'), 403);
+
+    $profile = LearnerProfile::query()
+        ->whereIn('institution_id', $this->institutionIds)
+        ->findOrFail($this->uliProfileId);
+
+    $data = $this->validate([
+        'uliNumber' => ['required', 'string', 'max:40', Rule::unique('learner_profiles', 'uli_number')->ignore($profile->id)],
+        'uliReason' => ['nullable', 'string', 'max:1000'],
+    ]);
+
+    $oldUli = $profile->uli_number;
+    $profile->forceFill([
+        'uli_number' => trim($data['uliNumber']),
+        'uli_assigned_at' => now(),
+        'uli_assigned_by_user_id' => auth()->id(),
+    ])->save();
+
+    ActivityLogger::record(
+        filled($oldUli) ? 'learner_uli_updated' : 'learner_uli_assigned',
+        (filled($oldUli) ? 'Updated' : 'Assigned').' learner ULI.'.(filled($data['uliReason'] ?? null) ? ' Reason: '.$data['uliReason'] : ''),
+        (int) $profile->institution_id,
+        [
+            'learner_profile_id' => $profile->id,
+            'learner_user_id' => $profile->user_id,
+            'old_uli' => $oldUli,
+            'new_uli' => $profile->uli_number,
+            'reason' => filled($data['uliReason'] ?? null) ? $data['uliReason'] : null,
+        ]
+    );
+
+    $this->reset('uliProfileId', 'uliNumber', 'uliReason');
+    unset($this->records);
+    Flux::toast(variant: 'success', text: 'ULI number saved and recorded in the activity log.');
+};
+
 ?>
 
 <div class="mx-auto max-w-7xl space-y-6 pb-10">
@@ -105,6 +164,38 @@ $restore = function (int $id): void {
     <flux:card class="bg-white p-5 shadow-sm"><div class="grid gap-3 md:grid-cols-[1fr_260px]"><flux:input wire:model.live.debounce.300ms="search" label="Search name, Scholar ID, reference, email, course" placeholder="Search records…"/><flux:select wire:model.live="institutionFilter" label="Institution"><flux:select.option value="">All assigned institutions</flux:select.option>@foreach($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->code }} — {{ $institution->name }}</flux:select.option>@endforeach</flux:select></div></flux:card>
     @if($this->viewingRecord)<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Student profile"><div class="my-auto w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div class="flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Student profile</p><flux:heading size="lg" class="mt-1">{{ $this->viewingRecord->learner_name }}</flux:heading><flux:text class="mt-1">{{ $this->viewingRecord->scholar_id ?: $this->viewingRecord->reference_no }} · {{ $this->viewingRecord->institution?->code }}</flux:text></div><button type="button" wire:click="$set('viewingId', null)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button></div><dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Email</dt><dd class="mt-1 break-words font-semibold">{{ $this->viewingRecord->email ?: 'Not recorded' }}</dd></div><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Contact</dt><dd class="mt-1 font-semibold">{{ $this->viewingRecord->contact_number ?: 'Not recorded' }}</dd></div><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Course</dt><dd class="mt-1 font-semibold">{{ $this->viewingRecord->course?->name ?: 'Not assigned' }}</dd></div><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Training batch</dt><dd class="mt-1 font-semibold">{{ $this->viewingRecord->trainingBatch?->name ?: 'Not assigned' }}</dd></div><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Application status</dt><dd class="mt-1 font-semibold">{{ str($this->viewingRecord->application_status)->headline() }}</dd></div><div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Dates</dt><dd class="mt-1 text-sm">Submitted: {{ $this->viewingRecord->submitted_at?->format('M j, Y') ?: '—' }}<br />Confirmed: {{ $this->viewingRecord->confirmed_at?->format('M j, Y') ?: '—' }}</dd></div></dl>@if($this->viewingRecord->archive_reason)<p class="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">Archive reason: {{ $this->viewingRecord->archive_reason }}</p>@endif</div></div></div>@endif
     @if($editingId)<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Edit student details"><div class="my-auto w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div class="mb-4 flex items-center justify-between gap-3"><flux:heading size="lg">Update student details</flux:heading><button type="button" wire:click="$set('editingId', null)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button></div><form wire:submit="saveEdit" class="mt-4 grid gap-4 md:grid-cols-2"><flux:input wire:model="editName" label="Full name" required/><flux:input wire:model="editEmail" label="Email" type="email"/><flux:input wire:model="editPhone" label="Contact number"/><flux:select wire:model.live="editCourseId" label="Course" required>@foreach($this->courses as $course)<flux:select.option value="{{ $course->id }}">{{ $course->institution?->code }} · {{ $course->name }}</flux:select.option>@endforeach</flux:select><flux:select wire:model="editBatchId" label="Training batch"><flux:select.option value="">No batch assigned</flux:select.option>@foreach($this->batches as $batch)<flux:select.option value="{{ $batch->id }}">{{ $batch->code }} — {{ $batch->name }}</flux:select.option>@endforeach</flux:select><div class="md:col-span-2"><flux:textarea wire:model="editReason" label="Reason for change (required for audit)" required/></div>@error('editReason')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror<div class="flex justify-end gap-2 md:col-span-2"><flux:button variant="ghost" type="button" wire:click="$set('editingId', null)">Cancel</flux:button><flux:button type="submit" variant="primary">Save changes</flux:button></div></form></div></div>@endif
+    @if($uliProfileId)
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Assign ULI">
+            <div class="my-auto w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <flux:heading size="lg">Assign ULI Number</flux:heading>
+                        <flux:text class="mt-1">For Registrar and Administrator only.</flux:text>
+                    </div>
+                    <button type="button" wire:click="$set('uliProfileId', null)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100">×</button>
+                </div>
+                <form wire:submit="saveUli" class="space-y-4">
+                    <flux:input wire:model="uliNumber" label="Unique Learner Identifier (ULI) Number" placeholder="Enter official TESDA/T2MIS ULI" required maxlength="40"/>
+                    @error('uliNumber')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror
+                    <flux:textarea wire:model="uliReason" label="Reason / reference (optional)" placeholder="Optional: e.g. Verified against TESDA/T2MIS record"/>
+                    @error('uliReason')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror
+                    <p class="text-xs text-slate-500">The ULI must be verified from the official TESDA/T2MIS record. Duplicate ULI numbers are not allowed.</p>
+                    <div class="flex justify-end gap-2">
+                        <flux:button type="button" variant="ghost" wire:click="$set('uliProfileId', null)">Cancel</flux:button>
+                        <flux:button type="submit" variant="primary">Save ULI</flux:button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
     @if($archiveId)<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Archive student record"><div class="my-auto w-full max-w-xl rounded-2xl border border-rose-100 bg-white p-5 shadow-2xl"><div class="mb-4 flex items-center justify-between gap-3"><flux:heading size="lg">Archive student record</flux:heading><button type="button" wire:click="$set('archiveId', null)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button></div><form wire:submit="confirmArchive" class="mt-3 space-y-3"><flux:textarea wire:model="archiveReason" label="Archive reason" placeholder="For example: withdrawn, inactive, duplicate, or retention review" required/>@error('archiveReason')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror<div class="flex justify-end gap-2"><flux:button type="button" variant="ghost" wire:click="$set('archiveId', null)">Cancel</flux:button><flux:button type="submit" variant="danger">Confirm archive</flux:button></div></form></div></div>@endif
-    <flux:card class="bg-white p-0 shadow-sm"><div class="overflow-x-auto"><table class="w-full min-w-[1100px] text-left text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Scholar / Reference</th><th class="px-4 py-3">Course / Batch</th><th class="px-4 py-3">Institution</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Contact</th><th class="px-4 py-3">Action</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($this->records as $record)<tr wire:key="student-record-{{ $record->id }}"><td class="px-4 py-4"><p class="font-semibold">{{ $record->scholar_id ?: $record->learner_name }}</p><p class="text-xs text-slate-500">{{ $record->reference_no }}</p><p class="text-xs text-slate-500">{{ $record->email }}</p></td><td class="px-4 py-4"><p>{{ $record->course?->name ?? 'No course' }}</p><p class="text-xs text-slate-500">{{ $record->trainingBatch?->name ?? 'No batch assigned' }}</p></td><td class="px-4 py-4">{{ $record->institution?->code }}</td><td class="px-4 py-4"><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{{ str($record->application_status)->headline() }}</span>@if($record->archived_at)<p class="mt-1 text-xs text-rose-600">Archived {{ $record->archived_at->format('M j, Y') }}</p>@endif</td><td class="px-4 py-4">{{ $record->contact_number ?: '—' }}</td><td class="px-4 py-4"><div class="flex flex-wrap gap-2"><flux:button size="sm" variant="ghost" wire:click="viewProfile({{ $record->id }})">View profile</flux:button>@if($status === 'archived')<flux:button size="sm" variant="primary" wire:click="restore({{ $record->id }})" wire:confirm="Restore this record?">Restore</flux:button>@else @if($record->application_status !== 'confirmed' && ! $record->scholar_id)<flux:button size="sm" variant="outline" wire:click="edit({{ $record->id }})">Update</flux:button>@else<span class="self-center text-xs text-slate-400">Confirmed record locked</span>@endif<flux:button size="sm" variant="ghost" wire:click="archive({{ $record->id }})">Archive</flux:button>@endif</div>@if($record->archive_reason)<p class="mt-1 max-w-xs text-xs text-slate-500">Reason: {{ $record->archive_reason }}</p>@endif</td></tr>@empty<tr><td colspan="6" class="px-4 py-12 text-center text-slate-500">No {{ $status === 'archived' ? 'archived ' : '' }}records match your search.</td></tr>@endforelse</tbody></table></div><div class="p-4">{{ $this->records->links() }}</div></flux:card>
+    <flux:card class="bg-white p-0 shadow-sm"><div class="overflow-x-auto"><table class="w-full min-w-[1100px] text-left text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Scholar / Reference</th><th class="px-4 py-3">Course / Batch</th><th class="px-4 py-3">Institution</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Contact</th><th class="px-4 py-3">ULI Status</th><th class="px-4 py-3">Action</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($this->records as $record)<tr wire:key="student-record-{{ $record->id }}"><td class="px-4 py-4"><p class="font-semibold">{{ $record->scholar_id ?: $record->learner_name }}</p><p class="text-xs text-slate-500">{{ $record->reference_no }}</p><p class="text-xs text-slate-500">{{ $record->email }}</p></td><td class="px-4 py-4"><p>{{ $record->course?->name ?? 'No course' }}</p><p class="text-xs text-slate-500">{{ $record->trainingBatch?->name ?? 'No batch assigned' }}</p></td><td class="px-4 py-4">{{ $record->institution?->code }}</td><td class="px-4 py-4"><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{{ str($record->application_status)->headline() }}</span>@if($record->archived_at)<p class="mt-1 text-xs text-rose-600">Archived {{ $record->archived_at->format('M j, Y') }}</p>@endif</td><td class="px-4 py-4">{{ $record->contact_number ?: '—' }}</td><td class="px-4 py-4">
+        @php($learnerProfile = $record->learner_user_id ? \App\Models\LearnerProfile::query()->where('user_id', $record->learner_user_id)->first() : null)
+        @if($learnerProfile && filled($learnerProfile->uli_number))
+            <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">Assigned</span>
+            <p class="mt-1 text-xs text-slate-500">{{ $learnerProfile->uli_number }}</p>
+        @else
+            <span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">Not assigned</span>
+        @endif
+    </td><td class="px-4 py-4"><div class="flex flex-wrap gap-2">@if($record->learner_user_id)<flux:button size="sm" variant="outline" wire:click="assignUli({{ $record->id }})">Assign ULI</flux:button>@endif<flux:button size="sm" variant="ghost" wire:click="viewProfile({{ $record->id }})">View profile</flux:button>@if($status === 'archived')<flux:button size="sm" variant="primary" wire:click="restore({{ $record->id }})" wire:confirm="Restore this record?">Restore</flux:button>@else @if($record->application_status !== 'confirmed' && ! $record->scholar_id)<flux:button size="sm" variant="outline" wire:click="edit({{ $record->id }})">Update</flux:button>@else<span class="self-center text-xs text-slate-400">Confirmed record locked</span>@endif<flux:button size="sm" variant="ghost" wire:click="archive({{ $record->id }})">Archive</flux:button>@endif</div>@if($record->archive_reason)<p class="mt-1 max-w-xs text-xs text-slate-500">Reason: {{ $record->archive_reason }}</p>@endif</td></tr>@empty<tr><td colspan="7" class="px-4 py-12 text-center text-slate-500">No {{ $status === 'archived' ? 'archived ' : '' }}records match your search.</td></tr>@endforelse</tbody></table></div><div class="p-4">{{ $this->records->links() }}</div></flux:card>
 </div>
