@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 219 72% 21%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 175 77% 26%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 95%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 175 77% 26%;
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-slate-200;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@media print {
+  @page {
+    size: portrait;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* When printing the ID card sheet, hide normal web layout */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Reveal only the dedicated ID printable sheet */
+  #tesda-id-print-sheet,
+  #tesda-id-print-sheet * {
+    visibility: visible !important;
+  }
+
+  #tesda-id-print-sheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    display: block !important;
+    background: #ffffff !important;
+    margin: 0 auto !important;
+    padding: 10px !important;
+    z-index: 999999 !important;
+  }
+
+  .id-flip-scene,
+  .id-flip-inner,
+  .id-lanyard-sway,
+  .id-holo-shine {
+    animation: none !important;
+    perspective: none !important;
+    transform: none !important;
+  }
+}
+
+/* ===== Digital System ID: 3D flip card, lanyard sway & holographic shine ===== */
+.id-flip-scene {
+  perspective: 1400px;
+}
+
+.id-flip-inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.85s cubic-bezier(0.22, 1.18, 0.36, 1);
+}
+
+.id-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.id-flip-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.id-flip-back {
+  transform: rotateY(180deg);
+}
+
+.id-lanyard-sway {
+  transform-origin: 50% 0%;
+  animation: id-sway 5.5s ease-in-out infinite;
+}
+
+.id-lanyard-sway.is-flipping {
+  animation: id-swing-kick 0.9s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+@keyframes id-sway {
+  0%,
+  100% {
+    transform: rotate(-1.3deg);
+  }
+  50% {
+    transform: rotate(1.3deg);
+  }
+}
+
+@keyframes id-swing-kick {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  30% {
+    transform: rotate(-4deg) translateY(-6px);
+  }
+  65% {
+    transform: rotate(2.5deg) translateY(2px);
+  }
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+}
+
+.id-holo-shine {
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 45%,
+    rgba(125, 211, 252, 0.25) 50%,
+    rgba(253, 230, 138, 0.25) 55%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: id-shine 4.5s ease-in-out infinite;
+  mix-blend-mode: overlay;
+}
+
+@keyframes id-shine {
+  0% {
+    background-position: 160% 0;
+  }
+  55%,
+  100% {
+    background-position: -60% 0;
+  }
+}
+
+.portal-fade-in {
+  animation: portal-fade-in 0.35s ease-out both;
+}
+
+@keyframes portal-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-flip-inner {
+    transition-duration: 0.01ms;
+  }
+  .id-lanyard-sway,
+  .id-lanyard-sway.is-flipping,
+  .id-holo-shine,
+  .portal-fade-in {
+    animation: none;
+  }
+}
+
+@media print {
+  .id-lanyard-sway,
+  .id-holo-shine {
+    animation: none !important;
+  }
+}

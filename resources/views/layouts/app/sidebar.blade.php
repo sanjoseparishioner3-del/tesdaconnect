@@ -12,10 +12,15 @@
                 width: min(19rem, calc(100vw - 1rem)) !important;
                 max-width: calc(100vw - 1rem) !important;
                 min-width: 0;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                display: flex !important;
+                flex-direction: column !important;
                 box-sizing: border-box;
-                background-color: #102f68 !important;
+                background: linear-gradient(180deg, #0c2352 0%, #102f68 55%, #091d45 100%) !important;
                 color: #ffffff !important;
                 overflow-x: hidden !important;
+                overflow-y: hidden !important;
             }
 
             .tesda-sidebar,
@@ -23,19 +28,50 @@
                 box-sizing: border-box;
             }
 
-            /* Keep the vertical menu scrollable while eliminating the bottom horizontal bar. */
-            .tesda-sidebar [data-flux-sidebar-nav],
-            .tesda-sidebar [data-flux-sidebar-group] {
+            /* Only the main navigation scrolls cleanly; sections stay expanded with zero nested scrollbars. */
+            .tesda-sidebar [data-flux-sidebar-nav] {
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
                 min-width: 0 !important;
                 max-width: 100% !important;
                 overflow-x: hidden !important;
+                overflow-y: auto !important;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(147, 197, 253, 0.45) transparent;
+                overscroll-behavior: contain;
             }
 
-            /* Only the main navigation should scroll; expandable groups must not create nested scrollbars. */
-            .tesda-sidebar > [data-flux-sidebar-nav] {
-                scrollbar-width: thin;
-                scrollbar-color: rgba(191, 219, 254, 0.55) transparent;
-                overscroll-behavior: contain;
+            .tesda-sidebar [data-flux-sidebar-nav]::-webkit-scrollbar {
+                width: 5px;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-nav]::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-nav]::-webkit-scrollbar-thumb {
+                background: rgba(147, 197, 253, 0.35);
+                border-radius: 9999px;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-nav]::-webkit-scrollbar-thumb:hover {
+                background: rgba(147, 197, 253, 0.6);
+            }
+
+            .tesda-sidebar [data-flux-sidebar-group] {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 0.2rem !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                overflow: visible !important;
+                flex-shrink: 0 !important;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-group] + [data-flux-sidebar-group] {
+                margin-top: 0.85rem !important;
+                padding-top: 0.85rem !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
             }
 
             /* Use the same typography for every role (administrator, registrar, focal person, learner). */
@@ -43,23 +79,14 @@
                 width: 100%;
                 min-width: 0 !important;
                 max-width: 100% !important;
+                min-height: 2.35rem;
+                padding: 0.5rem 0.75rem !important;
+                border-radius: 0.75rem !important;
                 white-space: normal !important;
-                font-size: 1rem !important;
-                line-height: 1.35 !important;
-                font-weight: 600;
-            }
-
-            .tesda-sidebar [data-flux-sidebar-item] > span:last-child {
-                font-size: inherit !important;
-            }
-
-            /* Expandable and non-expandable group labels should have identical sizing. */
-            .tesda-sidebar [data-flux-sidebar-group-heading],
-            .tesda-sidebar [data-flux-sidebar-group] button[aria-expanded],
-            .tesda-sidebar [data-flux-sidebar-group] [role="button"][aria-expanded] {
                 font-size: 0.875rem !important;
-                line-height: 1.3 !important;
-                font-weight: 700 !important;
+                line-height: 1.35 !important;
+                font-weight: 500;
+                transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
             }
 
             .tesda-sidebar [data-flux-sidebar-item] > span:last-child {
@@ -68,6 +95,7 @@
                 max-width: 100%;
                 white-space: normal !important;
                 overflow-wrap: anywhere;
+                font-size: inherit !important;
                 line-height: 1.35;
             }
 
@@ -76,11 +104,18 @@
                 flex-shrink: 0;
             }
 
+            /* Group headings share clean, crisp styling across every role without truncation or overlap. */
             .tesda-sidebar [data-flux-sidebar-group-heading] {
                 max-width: 100%;
+                padding: 0 0.625rem 0.3rem !important;
+                color: #7dd3fc !important;
+                font-size: 0.72rem !important;
+                line-height: 1.3 !important;
+                font-weight: 800 !important;
+                letter-spacing: 0.09em !important;
+                text-transform: uppercase !important;
                 white-space: normal !important;
                 overflow-wrap: anywhere;
-                line-height: 1.3;
             }
 
             .tesda-sidebar .tesda-disabled-nav {
@@ -89,9 +124,11 @@
                 max-width: 100%;
                 flex-wrap: wrap;
                 overflow-wrap: anywhere;
-                font-size: 1rem !important;
+                font-size: 0.875rem !important;
                 line-height: 1.35 !important;
                 font-weight: 600;
+                color: rgba(234, 242, 255, 0.7) !important;
+                cursor: not-allowed;
             }
 
             .tesda-sidebar .tesda-disabled-nav > span:first-of-type {
@@ -107,6 +144,10 @@
                 white-space: normal !important;
                 overflow-wrap: anywhere;
                 margin-left: auto;
+                color: #bfdbfe !important;
+                font-size: 9px;
+                line-height: 1.2;
+                letter-spacing: 0.02em;
             }
 
             @media (max-width: 640px) {
@@ -120,11 +161,8 @@
                     padding-inline: 0.5rem;
                 }
 
-                /* Do not shrink group labels on mobile; keep typography consistent across roles. */
-                .tesda-sidebar [data-flux-sidebar-group-heading],
-                .tesda-sidebar [data-flux-sidebar-group] button[aria-expanded],
-                .tesda-sidebar [data-flux-sidebar-group] [role="button"][aria-expanded] {
-                    font-size: 0.875rem !important;
+                .tesda-sidebar [data-flux-sidebar-group-heading] {
+                    font-size: 0.72rem !important;
                 }
 
                 .tesda-sidebar .tesda-disabled-nav {
@@ -140,18 +178,17 @@
             .tesda-sidebar [data-flux-sidebar-item],
             .tesda-sidebar [data-flux-sidebar-item] > *,
             .tesda-sidebar [data-flux-sidebar-item] svg {
-                color: #eaf2ff !important;
+                color: #e2ecff !important;
             }
 
             .tesda-sidebar [data-flux-sidebar-item]:hover {
-                background-color: #ffffff !important;
-                color: #102f68 !important;
+                background-color: rgba(255, 255, 255, 0.14) !important;
+                color: #ffffff !important;
             }
 
-            .tesda-sidebar [data-flux-sidebar-item]:hover,
             .tesda-sidebar [data-flux-sidebar-item]:hover *,
             .tesda-sidebar [data-flux-sidebar-item]:hover svg {
-                color: #102f68 !important;
+                color: #ffffff !important;
             }
 
             .tesda-sidebar [data-flux-sidebar-item]:focus-visible {
@@ -164,6 +201,7 @@
                 background-color: #ffffff !important;
                 color: #102f68 !important;
                 font-weight: 700 !important;
+                box-shadow: 0 4px 12px rgba(5, 16, 40, 0.25);
             }
 
             .tesda-sidebar [data-flux-sidebar-item][data-current] *,
@@ -173,36 +211,21 @@
                 color: #102f68 !important;
             }
 
-            .tesda-sidebar [data-flux-sidebar-group-heading] {
-                color: #bfdbfe !important;
-            }
-
-            .tesda-sidebar .tesda-disabled-nav {
-                color: rgba(234, 242, 255, 0.7) !important;
-                cursor: not-allowed;
-            }
-
             .tesda-sidebar .tesda-disabled-nav svg {
                 color: rgba(191, 219, 254, 0.65) !important;
             }
 
-            .tesda-sidebar .tesda-unavailable-label {
-                color: #bfdbfe !important;
-                font-size: 9px;
-                line-height: 1.2;
-                letter-spacing: 0.02em;
-                white-space: nowrap;
-            }
-
             .tesda-sidebar .tesda-nav-subheading {
-                color: #bfdbfe !important;
+                color: #7dd3fc !important;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
             }
 
-            .tesda-sidebar a,
-            .tesda-sidebar a span {
-                color: inherit;
+            .tesda-sidebar .tesda-brand-mark {
+                background-color: #ffffff !important;
+                color: #102f68 !important;
+                border: 2px solid rgba(246, 169, 21, 0.78) !important;
+                box-shadow: 0 4px 12px rgba(4, 15, 42, 0.28);
             }
 
             .tesda-sidebar .tesda-brand-name {
@@ -246,20 +269,20 @@
         <flux:sidebar
             sticky
             collapsible="mobile"
-            class="tesda-sidebar border-e-0 shadow-xl shadow-slate-900/10"
+            class="tesda-sidebar border-e-0 shadow-xl shadow-slate-900/15"
         >
-            <flux:sidebar.header class="border-b border-white/10 px-5 py-5">
+            <flux:sidebar.header class="shrink-0 border-b border-white/15 px-4 py-4">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-3" wire:navigate>
-                    <span class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-sm font-black text-[#102f68]">
+                    <span class="tesda-brand-mark grid size-10 shrink-0 place-items-center rounded-full text-sm font-black tracking-tight">
                         TC
                     </span>
 
                     <span class="grid gap-0.5 leading-tight">
-                        <span class="tesda-brand-name font-bold tracking-tight">
+                        <span class="tesda-brand-name text-[15px] font-extrabold tracking-tight">
                             TESDA<span class="tesda-brand-accent">Connect</span>
                         </span>
 
-                        <span class="tesda-brand-subtitle text-[11px]">
+                        <span class="tesda-brand-subtitle text-[11px] font-medium">
                             Training Operations
                         </span>
                     </span>
@@ -268,9 +291,9 @@
                 <flux:sidebar.collapse class="text-white lg:hidden" />
             </flux:sidebar.header>
 
-            <flux:sidebar.nav class="min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-3 py-4" style="max-height: calc(100dvh - 13rem);">
+            <flux:sidebar.nav class="min-w-0 max-w-full flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-3 py-3.5">
                 @if ($user->hasRole('administrator'))
-                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="dashboard" class="grid text-blue-200">
+                    <flux:sidebar.group heading="DASHBOARD" data-tesda-sidebar-group="dashboard">
                         <flux:sidebar.item
                             icon="home"
                             :href="route('dashboard') . '#system-overview'"
@@ -279,7 +302,14 @@
                         >
                             System Overview
                         </flux:sidebar.item>
-                        
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('dashboard') . '#bst-mif-comparison'"
+                            :current="false"
+                            wire:navigate
+                        >
+                            BST ↔ MIF Comparison
+                        </flux:sidebar.item>
                         <flux:sidebar.item
                             icon="clipboard-document-list"
                             :href="route('system.activity')"
@@ -288,10 +318,9 @@
                         >
                             Activity Logs
                         </flux:sidebar.item>
-                        
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="ENROLLMENT MONITORING" expandable :expanded="false" data-tesda-sidebar-group="enrollment" class="grid text-blue-200">
+                    <flux:sidebar.group heading="ENROLLMENT MONITORING" data-tesda-sidebar-group="enrollment">
                         <flux:sidebar.item
                             icon="clipboard-document-list"
                             :href="route('enrollments.index', ['status' => 'submitted'])"
@@ -326,7 +355,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="SCHEDULING MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="scheduling" class="grid text-blue-200">
+                    <flux:sidebar.group heading="SCHEDULING MANAGEMENT" data-tesda-sidebar-group="scheduling">
                         <flux:sidebar.item
                             icon="calendar-days"
                             :href="route('schedules.index')"
@@ -393,7 +422,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="SYSTEM MONITORING" expandable :expanded="false" data-tesda-sidebar-group="system-monitoring" class="grid text-blue-200">
+                    <flux:sidebar.group heading="SYSTEM MONITORING" data-tesda-sidebar-group="system-monitoring">
                         <flux:sidebar.item
                             icon="users"
                             :href="route('system.accounts')"
@@ -428,7 +457,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="REPORTS & OVERSIGHT" expandable :expanded="false" data-tesda-sidebar-group="reports" class="grid text-blue-200">
+                    <flux:sidebar.group heading="REPORTS & OVERSIGHT" data-tesda-sidebar-group="reports">
                         <flux:sidebar.item
                             icon="chart-bar"
                             :href="route('progress.competency')"
@@ -461,7 +490,7 @@
                         >
                             Performance
                         </flux:sidebar.item>
-                        <div class="tesda-nav-subheading px-3 pt-3 pb-1 text-[10px] font-bold">Export</div>
+                        <div class="tesda-nav-subheading px-2.5 pt-2.5 pb-1 text-[10px] font-extrabold">Export</div>
                         <flux:sidebar.item
                             icon="document-arrow-down"
                             :href="route('reports.export', ['type' => 'enrollments'])"
@@ -485,7 +514,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @elseif ($user->hasRole('registrar'))
-                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="registrar-dashboard" class="grid text-blue-200">
+                    <flux:sidebar.group heading="DASHBOARD" data-tesda-sidebar-group="registrar-dashboard">
                         <flux:sidebar.item
                             icon="home"
                             :href="route('dashboard')"
@@ -504,7 +533,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="ENROLLMENT MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="registrar-enrollment" class="grid text-blue-200">
+                    <flux:sidebar.group heading="ENROLLMENT MANAGEMENT" data-tesda-sidebar-group="registrar-enrollment">
                         <flux:sidebar.item
                             icon="clipboard-document-list"
                             :href="route('enrollments.index')"
@@ -531,7 +560,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="STUDENT RECORDS" expandable :expanded="false" data-tesda-sidebar-group="registrar-student-records" class="grid text-blue-200">
+                    <flux:sidebar.group heading="STUDENT RECORDS" data-tesda-sidebar-group="registrar-student-records">
                         <flux:sidebar.item
                             icon="users"
                             :href="route('registrar.student-records')"
@@ -542,7 +571,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="ANNOUNCEMENTS" expandable :expanded="false" data-tesda-sidebar-group="registrar-announcements" class="grid text-blue-200">
+                    <flux:sidebar.group heading="ANNOUNCEMENTS" data-tesda-sidebar-group="registrar-announcements">
                         <flux:sidebar.item
                             icon="megaphone"
                             :href="route('announcements.index')"
@@ -553,7 +582,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="ACCOUNT MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="registrar-account-management" class="grid text-blue-200">
+                    <flux:sidebar.group heading="ACCOUNT MANAGEMENT" data-tesda-sidebar-group="registrar-account-management">
                         <flux:sidebar.item
                             icon="users"
                             :href="route('registrar.accounts')"
@@ -564,7 +593,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="INSTITUTIONS" expandable :expanded="false" data-tesda-sidebar-group="registrar-institutions" class="grid text-blue-200">
+                    <flux:sidebar.group heading="INSTITUTIONS" data-tesda-sidebar-group="registrar-institutions">
                         <flux:sidebar.item
                             icon="building-office-2"
                             :href="route('registrar.institutions')"
@@ -575,13 +604,13 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @elseif ($user->hasRole('focal_person'))
-                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="focal-dashboard" class="grid text-blue-200">
+                    <flux:sidebar.group heading="DASHBOARD" data-tesda-sidebar-group="focal-dashboard">
                         <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             Dashboard &amp; Institution Overview
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="COMPETENCY PROGRESS &amp; ACHIEVEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-competency" class="grid text-blue-200">
+                    <flux:sidebar.group heading="COMPETENCY PROGRESS &amp; ACHIEVEMENT" data-tesda-sidebar-group="focal-competency">
                         <flux:sidebar.item icon="chart-bar" :href="route('progress.competency')" :current="request()->routeIs('progress.competency')" wire:navigate>
                             Progress Charts, Update, Review &amp; Submit Summary
                         </flux:sidebar.item>
@@ -593,7 +622,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="COURSE MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-courses" class="grid text-blue-200">
+                    <flux:sidebar.group heading="COURSE MANAGEMENT" data-tesda-sidebar-group="focal-courses">
                         <flux:sidebar.item icon="book-open" :href="route('focal.courses')" :current="request()->routeIs('focal.courses')" wire:navigate>
                             Register, Update &amp; Archive Courses
                         </flux:sidebar.item>
@@ -602,13 +631,13 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="CERTIFICATION MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-certification" class="grid text-blue-200">
+                    <flux:sidebar.group heading="CERTIFICATION MANAGEMENT" data-tesda-sidebar-group="focal-certification">
                         <flux:sidebar.item icon="academic-cap" :href="route('certification.index')" :current="request()->routeIs('certification.*')" wire:navigate>
                             Batch Certification &amp; Issue Certificate
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="DOCUMENT &amp; ADMIN TASKS" expandable :expanded="false" data-tesda-sidebar-group="focal-documents" class="grid text-blue-200">
+                    <flux:sidebar.group heading="DOCUMENT &amp; ADMIN TASKS" data-tesda-sidebar-group="focal-documents">
                         <flux:sidebar.item icon="clipboard-document-list" :href="route('attendance.index')" :current="request()->routeIs('attendance.*')" wire:navigate>
                             Attendance Management
                         </flux:sidebar.item>
@@ -623,7 +652,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="REPORTS &amp; COMMUNICATION" expandable :expanded="false" data-tesda-sidebar-group="focal-reports" class="grid text-blue-200">
+                    <flux:sidebar.group heading="REPORTS &amp; COMMUNICATION" data-tesda-sidebar-group="focal-reports">
                         <flux:sidebar.item icon="chart-bar" :href="route('reports.index')" :current="request()->routeIs('reports.index')" wire:navigate>
                             Reports &amp; Oversight
                         </flux:sidebar.item>
@@ -632,7 +661,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @elseif ($user->hasRole('applicant', 'scholar'))
-                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="learner-dashboard" class="grid text-blue-200">
+                    <flux:sidebar.group heading="DASHBOARD" data-tesda-sidebar-group="learner-dashboard">
                         <flux:sidebar.item icon="home" :href="route('learner.portal')" :current="request()->routeIs('learner.portal')" wire:navigate>
                             Student / Scholar Dashboard
                         </flux:sidebar.item>
@@ -656,7 +685,7 @@
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 
-                    <flux:sidebar.group heading="ENROLLMENT SUBMISSION" expandable :expanded="false" data-tesda-sidebar-group="learner-enrollment" class="grid text-blue-200">
+                    <flux:sidebar.group heading="ENROLLMENT SUBMISSION" data-tesda-sidebar-group="learner-enrollment">
                         <flux:sidebar.item icon="document-text" :href="route('learner.requirements')" :current="request()->routeIs('learner.requirements')" wire:navigate>
                             View Requirements
                         </flux:sidebar.item>
@@ -664,8 +693,8 @@
                             Submit Enrollment / Registration Form
                         </flux:sidebar.item>
                     </flux:sidebar.group>
-                @elseif ($user->hasRole('focal_person'))
-                    <flux:sidebar.group heading="MAIN MENU" class="grid text-blue-200">
+                @else
+                    <flux:sidebar.group heading="MAIN MENU" data-tesda-sidebar-group="default-menu">
                         <flux:sidebar.item
                             icon="home"
                             :href="route('dashboard')"
@@ -674,142 +703,66 @@
                         >
                             Dashboard
                         </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endif
+
+                <div data-user-guide-sidebar class="mt-3 border-t border-white/10 pt-3">
                     <flux:sidebar.item
                         icon="book-open"
                         :href="route('user-guide')"
                         :current="request()->routeIs('user-guide')"
                         wire:navigate
                     >
-                        User Guide
+                        User Guide &amp; Role Handbook
                     </flux:sidebar.item>
-
-                        @if ($user->hasRole('registrar'))
-                            <flux:sidebar.item
-                                icon="clipboard-document-list"
-                                :href="route('enrollments.index')"
-                                :current="request()->routeIs('enrollments.*')"
-                                wire:navigate
-                            >
-                                Enrollment Monitoring
-                            </flux:sidebar.item>
-                        @endif
-
-                        @if ($user->hasRole('registrar', 'focal_person'))
-                            <flux:sidebar.item
-                                icon="calendar-days"
-                                :href="route('schedules.index')"
-                                :current="request()->routeIs('schedules.*')"
-                                wire:navigate
-                            >
-                                Scheduling Management
-                            </flux:sidebar.item>
-                        @endif
-
-                        @if ($user->hasRole('focal_person'))
-                            <flux:sidebar.item
-                                icon="academic-cap"
-                                :href="route('progress.index')"
-                                :current="request()->routeIs('progress.*')"
-                                wire:navigate
-                            >
-                                Progress & Achievement
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="clipboard-document-list"
-                                :href="route('attendance.index')"
-                                :current="request()->routeIs('attendance.*')"
-                                wire:navigate
-                            >
-                                Attendance Management
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="chart-bar"
-                                :href="route('progress.competency')"
-                                :current="request()->routeIs('progress.competency')"
-                                wire:navigate
-                            >
-                                Competency Progress
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="clipboard-document-list"
-                                :href="route('competencies.index')"
-                                :current="request()->routeIs('competencies.*')"
-                                wire:navigate
-                            >
-                                Competency Setup
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="academic-cap"
-                                :href="route('certification.index')"
-                                :current="request()->routeIs('certification.*')"
-                                wire:navigate
-                            >
-                                Certification Management
-                            </flux:sidebar.item>
-                        @endif
-
-                        @if ($user->hasRole('registrar', 'focal_person'))
-                            <flux:sidebar.item
-                                icon="chart-bar"
-                                :href="route('reports.index')"
-                                :current="request()->routeIs('reports.*')"
-                                wire:navigate
-                            >
-                                Reports & Oversight
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="clipboard-document-list"
-                                :href="route('announcements.index')"
-                                :current="request()->routeIs('announcements.*')"
-                                wire:navigate
-                            >
-                                Announcements
-                            </flux:sidebar.item>
-                        @endif
-
-                        @if ($user->hasRole('applicant', 'scholar'))
-                            <flux:sidebar.item
-                                icon="clipboard-document-list"
-                                :href="route('learner.registration')"
-                                :current="request()->routeIs('learner.registration')"
-                                wire:navigate
-                            >
-                                Registration Form
-                            </flux:sidebar.item>
-
-                            <flux:sidebar.item
-                                icon="academic-cap"
-                                :href="route('learner.portal')"
-                                :current="request()->routeIs('learner.portal')"
-                                wire:navigate
-                            >
-                                My Learning Portal
-                            </flux:sidebar.item>
-                        @endif
-                    </flux:sidebar.group>
-                @endif
+                </div>
             </flux:sidebar.nav>
 
-            <flux:spacer />
-            <div data-user-guide-sidebar class="px-3 pb-3">
-                <flux:sidebar.item
-                    icon="book-open"
-                    :href="route('user-guide')"
-                    :current="request()->routeIs('user-guide')"
-                    wire:navigate
+            <div class="shrink-0 border-t border-white/15 bg-black/15 p-3 space-y-2.5">
+                <div
+                    class="rounded-xl border border-white/15 bg-white/[0.08] p-2.5 text-xs text-white"
+                    x-data="{
+                        showVerify: false,
+                        pw: '',
+                        msg: '',
+                        busy: false,
+                        async sync() {
+                            this.busy = true;
+                            await window.TesdaOffline?.syncNow?.(true);
+                            this.busy = false;
+                            this.msg = 'Synced for offline use.';
+                        },
+                        async saveOfflinePw() {
+                            if (!this.pw) return;
+                            this.busy = true;
+                            this.msg = '';
+                            const res = await window.TesdaOffline?.enrollCurrentPassword?.(this.pw);
+                            this.busy = false;
+                            this.msg = res?.message || 'Unable to verify password.';
+                            if (res?.ok) {
+                                this.pw = '';
+                                this.showVerify = false;
+                            }
+                        }
+                    }"
                 >
-                    User Guide &amp; Role Handbook
-                </flux:sidebar.item>
-            </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-bold text-cyan-200">Offline Access</span>
+                        <a href="{{ asset('offline.html') }}" class="rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-white/25">Open</a>
+                    </div>
+                    <p data-tesda-offline-sidebar-status class="mt-1 text-[11px] leading-4 text-blue-100">Preparing offline cache…</p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                        <button type="button" x-on:click="sync()" x-bind:disabled="busy" class="rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/25 disabled:opacity-50">Sync now</button>
+                        <button type="button" x-on:click="showVerify = !showVerify" class="rounded-lg border border-white/20 px-2.5 py-1 text-[11px] font-semibold text-blue-100 hover:bg-white/10">Offline login</button>
+                    </div>
+                    <div x-show="showVerify" x-cloak class="mt-2 space-y-1.5">
+                        <input type="password" x-model="pw" placeholder="Confirm current password" class="w-full rounded-lg border border-white/20 bg-white px-2.5 py-1.5 text-xs text-slate-900">
+                        <button type="button" x-on:click="saveOfflinePw()" x-bind:disabled="busy" class="w-full rounded-lg bg-teal-400 px-2.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-teal-300">Save offline sign-in</button>
+                    </div>
+                    <p x-show="msg" x-text="msg" x-cloak class="mt-1.5 text-[11px] text-teal-200"></p>
+                </div>
 
-
-            <div class="border-t border-white/10 p-4">
-                <div class="flex items-center gap-3 rounded-xl bg-white/10 p-3">
+                <div class="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5">
                     <flux:avatar
                         :name="$user->name"
                         :initials="$user->initials()"
@@ -817,17 +770,17 @@
                     />
 
                     <div class="min-w-0 flex-1">
-                        <p class="tesda-user-name truncate text-sm font-semibold">
+                        <p class="tesda-user-name truncate text-sm font-semibold leading-tight">
                             {{ $user->name }}
                         </p>
 
-                        <p class="tesda-user-role truncate text-xs">
+                        <p class="tesda-user-role truncate text-xs leading-tight">
                             {{ $user->roleLabel() }}
                         </p>
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('logout') }}" class="mt-3">
+                <form method="POST" action="{{ route('logout') }}">
                     @csrf
 
                     <button
@@ -841,7 +794,7 @@
             </div>
         </flux:sidebar>
 
-        <flux:header class="border-b border-slate-200 bg-white px-4 shadow-sm lg:px-7">
+        <flux:header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur-md lg:px-7">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-3" inset="left" />
 
             <div class="hidden items-center gap-2 text-sm text-slate-500 md:flex">
@@ -854,10 +807,15 @@
 
             <flux:spacer />
 
-            <div class="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 sm:flex">
-                <span class="size-2 rounded-full bg-emerald-500"></span>
-                Online
-            </div>
+            <a
+                href="{{ asset('offline.html') }}"
+                data-tesda-connection-pill
+                title="View offline workspace"
+                class="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 sm:gap-2 sm:px-3 sm:py-1.5"
+            >
+                <span data-tesda-connection-dot class="size-2 rounded-full bg-emerald-500"></span>
+                <span data-tesda-connection-text>Online</span>
+            </a>
 
             <a
                 href="{{ route('profile.edit') }}"
@@ -889,116 +847,6 @@
                 <flux:toast />
             </flux:toast.group>
         @endpersist
-
-
-        <script>
-            (() => {
-                const storageKey = @js('tesda-connect-v2:sidebar-groups:' . (string) $user->getAuthIdentifier());
-                const rootSelector = '.tesda-sidebar';
-                const globalKey = '__tesdaConnectSidebarGroupPersistenceV2';
-
-                // The layout may be visited again through Livewire wire:navigate.
-                // Keep one delegated listener while restoring the saved state on each navigation.
-                if (window[globalKey]) {
-                    window[globalKey].restore();
-                    return;
-                }
-
-                let restoring = false;
-
-                const readState = () => {
-                    try {
-                        const value = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
-                        if (!value || typeof value !== 'object') return { openGroup: null };
-
-                        // Backward-compatible migration from the previous { groupId: true/false } format.
-                        if (typeof value.openGroup === 'string' || value.openGroup === null) {
-                            return { openGroup: value.openGroup || null };
-                        }
-
-                        const legacyOpenGroup = Object.keys(value).find((key) => value[key] === true);
-                        return { openGroup: legacyOpenGroup || null };
-                    } catch (error) {
-                        return { openGroup: null };
-                    }
-                };
-
-                const writeState = (openGroup) => {
-                    try {
-                        window.localStorage.setItem(storageKey, JSON.stringify({ openGroup: openGroup || null }));
-                    } catch (error) {
-                        // If storage is disabled, the sidebar still works for the current page.
-                    }
-                };
-
-                const groups = () => Array.from(document.querySelectorAll(`${rootSelector} [data-tesda-sidebar-group]`));
-                const findTrigger = (group) => group.querySelector('button[aria-expanded], [role="button"][aria-expanded]');
-
-                const setExpanded = (group, shouldExpand) => {
-                    const trigger = findTrigger(group);
-                    if (!trigger) return;
-
-                    const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-                    if (shouldExpand !== isExpanded) {
-                        restoring = true;
-                        trigger.click();
-                        restoring = false;
-                    }
-                };
-
-                const restore = () => {
-                    window.requestAnimationFrame(() => {
-                        const state = readState();
-                        const availableGroups = groups();
-                        const savedOpenGroup = availableGroups.some((group) => group.getAttribute('data-tesda-sidebar-group') === state.openGroup)
-                            ? state.openGroup
-                            : null;
-
-                        // Accordion behavior: restore exactly one open section; every other section stays closed.
-                        availableGroups.forEach((group) => {
-                            const id = group.getAttribute('data-tesda-sidebar-group');
-                            setExpanded(group, id === savedOpenGroup);
-                        });
-
-                        // Normalize older saved state to the exclusive single-open format.
-                        if (savedOpenGroup !== state.openGroup) writeState(savedOpenGroup);
-                    });
-                };
-
-                document.addEventListener('click', (event) => {
-                    if (!(event.target instanceof Element)) return;
-
-                    const trigger = event.target.closest(
-                        `${rootSelector} [data-tesda-sidebar-group] button[aria-expanded], ` +
-                        `${rootSelector} [data-tesda-sidebar-group] [role="button"][aria-expanded]`
-                    );
-
-                    if (!trigger || restoring) return;
-
-                    const group = trigger.closest('[data-tesda-sidebar-group]');
-                    const id = group?.getAttribute('data-tesda-sidebar-group');
-                    if (!id) return;
-
-                    // Wait until Flux toggles the clicked group, then close every other section.
-                    window.setTimeout(() => {
-                        const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-                        if (isExpanded) {
-                            groups().forEach((otherGroup) => {
-                                if (otherGroup !== group) setExpanded(otherGroup, false);
-                            });
-                            writeState(id);
-                        } else {
-                            writeState(null);
-                        }
-                    }, 0);
-                });
-
-                window[globalKey] = { restore };
-                document.addEventListener('livewire:navigated', restore);
-                document.addEventListener('DOMContentLoaded', restore, { once: true });
-                if (document.readyState !== 'loading') restore();
-            })();
-        </script>
 
         @include('layouts.app.partials.scroll-controls')
         @fluxScripts

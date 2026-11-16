@@ -130,8 +130,12 @@ $dashboard = computed(function (): array {
         'incomplete_records' => (clone $applications)->where('record_completeness', '<', 100)->count(),
         'upcoming_batches' => TrainingBatch::query()->whereIn('institution_id', $institutionIds)->where('status', 'upcoming')->count(),
         'readiness' => $total === 0 ? 0 : (int) round(($complete / $total) * 100),
-        'batches' => TrainingBatch::query()->with('course')->whereIn('institution_id', $institutionIds)->orderBy('starts_at')->take(6)->get(),
-        'activities' => ActivityLog::query()->whereIn('institution_id', $institutionIds)->latest()->take(6)->get(),
+        'batches' => TrainingBatch::query()->with(['course', 'institution'])->withCount('applications')->whereIn('institution_id', $institutionIds)->orderBy('starts_at')->take(6)->get(),
+        'activities' => ActivityLog::query()
+            ->when(! $user->hasRole('administrator'), fn ($query) => $query->whereIn('institution_id', $institutionIds))
+            ->latest()
+            ->take(6)
+            ->get(),
         'recent_submissions' => $user->hasRole('registrar')
             ? EnrollmentApplication::query()->with(['course', 'institution', 'trainingBatch'])
                 ->whereIn('institution_id', $institutionIds)->whereNotNull('submitted_at')->whereNull('archived_at')
@@ -163,7 +167,7 @@ $refresh = function (): void {
                     <span class="mt-1 block max-w-2xl text-sm leading-6 text-blue-100">Learn what your role can do, follow the right workflow, and find answers to common questions.</span>
                 </span>
             </div>
-            <span class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-extrabold text-[#102f68] transition group-hover:bg-amber-300">Open User Guide <span aria-hidden="true">â†’</span></span>
+            <span class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-extrabold text-[#102f68] transition group-hover:bg-amber-300">Open User Guide <span aria-hidden="true">→</span></span>
         </div>
     </a>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -237,51 +241,54 @@ $refresh = function (): void {
     @endif
 
     @if ($data['administrator_overview'])
-        <section class="space-y-5" aria-labelledby="system-overview-heading">
-            <div>
-                <flux:heading id="system-overview-heading" size="lg">System overview</flux:heading>
-                <flux:text class="mt-1">Administrator quick stats across BST and MIF.</flux:text>
+        <section id="system-overview" class="scroll-mt-20 space-y-5" aria-labelledby="system-overview-heading">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                    <flux:heading id="system-overview-heading" size="lg">System overview</flux:heading>
+                    <flux:text class="mt-1">Administrator quick stats across BST and MIF.</flux:text>
+                </div>
+                <span class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">Real-time database metrics</span>
             </div>
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ([
-                    ['Active users', $data['administrator_overview']['active_users'], 'Accounts with Active status'],
-                    ['Confirmed enrollees', $data['administrator_overview']['confirmed_enrollees'], 'Enrollment applications confirmed'],
-                    ['Pending tasks', $data['administrator_overview']['pending_tasks'], 'Submitted, under review, or returned'],
-                    ["This month’s intake", $data['administrator_overview']['this_month_intake'], 'Applications submitted this month'],
-                    ['Pending verifications', $data['administrator_overview']['pending_verifications'], 'Submitted or forwarded for review'],
-                    ['Schedule deadlines', $data['administrator_overview']['upcoming_schedule_deadlines'], 'Batch end dates within the next 30 days'],
-                ] as [$label, $value, $detail])
-                    <flux:card class="border border-slate-200 bg-white p-5 shadow-sm">
+                    ['Active users', $data['administrator_overview']['active_users'], 'Accounts with Active status', 'border-t-blue-600'],
+                    ['Confirmed enrollees', $data['administrator_overview']['confirmed_enrollees'], 'Enrollment applications confirmed', 'border-t-emerald-600'],
+                    ['Pending tasks', $data['administrator_overview']['pending_tasks'], 'Submitted, under review, or returned', 'border-t-amber-500'],
+                    ["This month’s intake", $data['administrator_overview']['this_month_intake'], 'Applications submitted this month', 'border-t-cyan-600'],
+                    ['Pending verifications', $data['administrator_overview']['pending_verifications'], 'Submitted or forwarded for review', 'border-t-indigo-600'],
+                    ['Schedule deadlines', $data['administrator_overview']['upcoming_schedule_deadlines'], 'Batch end dates within the next 30 days', 'border-t-rose-500'],
+                ] as [$label, $value, $detail, $topBorder])
+                    <flux:card class="border border-slate-200 border-t-4 {{ $topBorder }} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                         <p class="text-sm font-semibold text-slate-600">{{ $label }}</p>
-                        <p class="mt-2 text-3xl font-black tracking-tight text-[#102f68]">{{ $value }}</p>
-                        <p class="mt-1 text-xs text-slate-400">{{ $detail }}</p>
+                        <p class="mt-2 text-3xl font-black tracking-tight text-[#102f68]">{{ number_format($value) }}</p>
+                        <p class="mt-1.5 text-xs text-slate-500">{{ $detail }}</p>
                     </flux:card>
                 @endforeach
             </div>
 
-            <div>
+            <div id="bst-mif-comparison" class="scroll-mt-20 pt-2">
                 <flux:heading size="lg">BST vs MIF comparison</flux:heading>
                 <flux:text class="mt-1">Enrollment records, monthly intake, pending work, and completion rate.</flux:text>
             </div>
             <div class="grid gap-4 lg:grid-cols-2">
                 @foreach ([['code' => 'BST', 'tone' => 'blue'], ['code' => 'MIF', 'tone' => 'emerald']] as $institutionView)
                     @php($institutionStats = $data['administrator_overview']['comparison'][$institutionView['code']])
-                    <flux:card class="border-t-4 {{ $institutionView['tone'] === 'blue' ? 'border-t-blue-600' : 'border-t-emerald-600' }} bg-white p-5 shadow-sm">
+                    <flux:card class="border-t-4 {{ $institutionView['tone'] === 'blue' ? 'border-t-blue-600' : 'border-t-emerald-600' }} bg-white p-5 shadow-sm transition hover:shadow-md">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="text-xs font-bold uppercase tracking-widest {{ $institutionView['tone'] === 'blue' ? 'text-blue-700' : 'text-emerald-700' }}">{{ $institutionView['code'] }}</p>
                                 <flux:heading size="md" class="mt-1">{{ $institutionStats['name'] }}</flux:heading>
                             </div>
-                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ $institutionStats['completion_rate'] }}% complete</span>
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{{ $institutionStats['completion_rate'] }}% complete</span>
                         </div>
                         <dl class="mt-5 grid grid-cols-2 gap-3">
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">Enrollment records</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ $institutionStats['enrollment_records'] }}</dd></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">This month’s intake</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ $institutionStats['monthly_intake'] }}</dd></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">Pending applications</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ $institutionStats['pending'] }}</dd></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">Confirmed enrollees</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ $institutionStats['confirmed'] }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Enrollment records</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ number_format($institutionStats['enrollment_records']) }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">This month’s intake</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ number_format($institutionStats['monthly_intake']) }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Pending applications</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ number_format($institutionStats['pending']) }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Confirmed enrollees</dt><dd class="mt-1 text-2xl font-black text-slate-800">{{ number_format($institutionStats['confirmed']) }}</dd></div>
                         </dl>
-                        <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full {{ $institutionView['tone'] === 'blue' ? 'bg-blue-600' : 'bg-emerald-600' }}" style="width: {{ $institutionStats['completion_rate'] }}%"></div></div>
-                        <p class="mt-2 text-xs text-slate-400">Completion rate = completed certificates ÷ confirmed enrollees.</p>
+                        <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full transition-all duration-500 {{ $institutionView['tone'] === 'blue' ? 'bg-blue-600' : 'bg-emerald-600' }}" style="width: {{ $institutionStats['completion_rate'] }}%"></div></div>
+                        <p class="mt-2 text-xs text-slate-500">Completion rate = completed certificates ÷ confirmed enrollees.</p>
                     </flux:card>
                 @endforeach
             </div>
@@ -290,29 +297,43 @@ $refresh = function (): void {
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         @foreach ([
-            ['Total Trainees', $data['total_trainees'], 'Active learner records', 'border-l-[#173b78]', '♟'],
-            ['Pending Intake Forms', $data['pending_intakes'], 'Needs staff review', 'border-l-amber-500', '▤'],
-            ['Incomplete Records', $data['incomplete_records'], 'Documents or fields missing', 'border-l-rose-500', '⚠'],
-            ['Upcoming Batches', $data['upcoming_batches'], 'Ready for coordination', 'border-l-emerald-500', '□'],
-            ['Report Readiness', $data['readiness'].'%', 'Based on complete records', 'border-l-cyan-500', '◴'],
-        ] as [$label, $value, $detail, $border, $icon])
-            <flux:card class="border-l-4 {{ $border }} bg-white p-5 shadow-sm">
-                <span class="grid size-10 place-items-center rounded-xl bg-slate-50 text-lg text-slate-500">{{ $icon }}</span>
-                <p class="mt-4 text-4xl font-black tracking-tight text-[#102f68]">{{ $value }}</p>
+            ['Total Trainees', $data['total_trainees'], 'Active learner records', 'border-l-[#173b78]', 'bg-blue-50 text-[#102f68]', 'users'],
+            ['Pending Intake Forms', $data['pending_intakes'], 'Needs staff review', 'border-l-amber-500', 'bg-amber-50 text-amber-700', 'clipboard-document-list'],
+            ['Incomplete Records', $data['incomplete_records'], 'Documents or fields missing', 'border-l-rose-500', 'bg-rose-50 text-rose-700', 'exclamation-triangle'],
+            ['Upcoming Batches', $data['upcoming_batches'], 'Ready for coordination', 'border-l-emerald-500', 'bg-emerald-50 text-emerald-700', 'calendar-days'],
+            ['Report Readiness', $data['readiness'].'%', 'Based on complete records', 'border-l-cyan-500', 'bg-cyan-50 text-cyan-700', 'chart-bar'],
+        ] as [$label, $value, $detail, $border, $iconTone, $icon])
+            <flux:card class="border-l-4 {{ $border }} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                <span class="grid size-10 place-items-center rounded-xl {{ $iconTone }}">
+                    <flux:icon :icon="$icon" class="size-5" />
+                </span>
+                <p class="mt-4 text-3xl font-black tracking-tight text-[#102f68]">{{ $value }}</p>
                 <p class="mt-1 text-sm font-semibold text-slate-700">{{ $label }}</p>
-                <p class="mt-2 text-xs text-slate-400">{{ $detail }}</p>
+                <p class="mt-1.5 text-xs text-slate-500">{{ $detail }}</p>
             </flux:card>
         @endforeach
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(20rem,.85fr)]">
         <flux:card class="bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between"><div><flux:heading size="lg">Trainee enrollment per batch</flux:heading><flux:text class="mt-1">Current records assigned to each training batch</flux:text></div><span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Live data</span></div>
-            <div class="mt-8 flex h-64 items-end gap-3 border-b border-slate-100 px-2 pb-7">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <flux:heading size="lg">Trainee enrollment per batch</flux:heading>
+                    <flux:text class="mt-1">Current records assigned vs. batch capacity</flux:text>
+                </div>
+                <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Live DB counts</span>
+            </div>
+            <div class="mt-8 flex h-64 items-end gap-4 border-b border-slate-100 px-2 pb-4">
                 @forelse ($data['batches'] as $batch)
-                    @php($enrolled = $batch->applications()->count())
-                    @php($height = max(12, min(100, $batch->capacity ? ($enrolled / $batch->capacity) * 100 : 0)))
-                    <div class="flex min-w-0 flex-1 flex-col items-center gap-2"><span class="text-sm font-bold text-slate-600">{{ $enrolled }}</span><div class="w-full max-w-16 rounded-t-xl bg-gradient-to-t from-[#173b78] to-cyan-500 transition-all" style="height: {{ $height }}%"></div><span class="truncate text-center text-xs text-slate-500">{{ $batch->name }}</span></div>
+                    @php($enrolled = (int) ($batch->applications_count ?? 0))
+                    @php($capacity = max(1, (int) $batch->capacity))
+                    @php($fillPercent = $batch->capacity > 0 ? min(100, (int) round(($enrolled / $capacity) * 100)) : 0)
+                    @php($barHeight = $enrolled > 0 ? max(14, $fillPercent) : 6)
+                    <div class="flex min-w-0 flex-1 flex-col items-center gap-2" title="{{ $batch->name }}: {{ $enrolled }} / {{ $batch->capacity ?? 0 }} enrolled ({{ $fillPercent }}%)">
+                        <span class="text-xs font-bold text-slate-700">{{ $enrolled }}<span class="font-normal text-slate-400">/{{ $batch->capacity ?? 0 }}</span></span>
+                        <div class="w-full max-w-16 rounded-t-xl transition-all {{ $enrolled > 0 ? 'bg-gradient-to-t from-[#173b78] to-cyan-500' : 'bg-slate-200' }}" style="height: {{ $barHeight }}%"></div>
+                        <span class="w-full truncate text-center text-xs font-medium text-slate-600">{{ $batch->name }}</span>
+                    </div>
                 @empty
                     <div class="grid h-full w-full place-items-center text-sm text-slate-400">No batches have been created yet.</div>
                 @endforelse
@@ -320,18 +341,46 @@ $refresh = function (): void {
         </flux:card>
 
         <flux:card class="bg-white p-6 shadow-sm">
+            @php($completeCount = max(0, $data['total_trainees'] - $data['incomplete_records']))
             <flux:heading size="lg">Record completeness</flux:heading>
-            <div class="mt-7 grid place-items-center"><div class="grid size-48 place-items-center rounded-full" style="background: conic-gradient(#22c55e {{ $data['readiness'] }}%, #fee2e2 0)"><div class="grid size-32 place-items-center rounded-full bg-white text-center"><span class="text-4xl font-black text-[#102f68]">{{ $data['readiness'] }}%</span><span class="-mt-5 text-xs text-slate-400">complete</span></div></div></div>
-            <div class="mt-7 grid grid-cols-2 gap-3 text-sm"><div class="rounded-xl bg-emerald-50 p-3"><p class="font-bold text-emerald-700">Complete</p><p class="mt-1 text-xs text-emerald-600">Ready for reports</p></div><div class="rounded-xl bg-rose-50 p-3"><p class="font-bold text-rose-700">Action needed</p><p class="mt-1 text-xs text-rose-600">Complete missing data</p></div></div>
+            <div class="mt-7 grid place-items-center">
+                <div class="grid size-48 place-items-center rounded-full" style="background: conic-gradient(#22c55e {{ $data['readiness'] }}%, #fee2e2 0)">
+                    <div class="grid size-32 place-items-center rounded-full bg-white text-center shadow-inner">
+                        <span class="text-4xl font-black text-[#102f68]">{{ $data['readiness'] }}%</span>
+                        <span class="-mt-4 text-xs font-medium text-slate-500">complete</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-7 grid grid-cols-2 gap-3 text-sm">
+                <div class="rounded-xl bg-emerald-50 p-3">
+                    <p class="font-bold text-emerald-700">{{ number_format($completeCount) }} Complete</p>
+                    <p class="mt-1 text-xs text-emerald-600">Ready for reports</p>
+                </div>
+                <div class="rounded-xl bg-rose-50 p-3">
+                    <p class="font-bold text-rose-700">{{ number_format($data['incomplete_records']) }} Action needed</p>
+                    <p class="mt-1 text-xs text-rose-600">Missing requirements</p>
+                </div>
+            </div>
         </flux:card>
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <flux:card class="bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between"><flux:heading size="lg">Recent activity</flux:heading><a href="{{ auth()->user()->hasRole('administrator') ? route('system.activity') : route('reports.index') }}" class="text-sm font-semibold text-blue-700" wire:navigate>View all</a></div>
+            <div class="flex items-center justify-between">
+                <flux:heading size="lg">Recent activity</flux:heading>
+                <a href="{{ auth()->user()->hasRole('administrator') ? route('system.activity') : route('reports.index') }}" class="text-sm font-semibold text-blue-700 hover:underline" wire:navigate>View all</a>
+            </div>
             <div class="mt-4 divide-y divide-slate-100">
                 @forelse ($data['activities'] as $activity)
-                    <div class="flex gap-3 py-4"><span class="mt-0.5 grid size-8 place-items-center rounded-full bg-blue-50 text-sm">●</span><div><p class="text-sm font-semibold text-slate-700">{{ $activity->description }}</p><p class="mt-1 text-xs text-slate-400">{{ $activity->created_at->diffForHumans() }}</p></div></div>
+                    <div class="flex items-start gap-3 py-3.5">
+                        <span class="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-700">
+                            <flux:icon icon="clock" class="size-4" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold text-slate-700">{{ $activity->description }}</p>
+                            <p class="mt-1 text-xs text-slate-400">{{ $activity->created_at->diffForHumans() }}</p>
+                        </div>
+                    </div>
                 @empty
                     <p class="py-8 text-center text-sm text-slate-400">No activity has been logged yet.</p>
                 @endforelse
@@ -352,7 +401,39 @@ $refresh = function (): void {
                     <flux:button variant="primary" :href="route('learner.portal')" wire:navigate icon="academic-cap">My learning portal</flux:button>
                 @endif
             </div>
-            <div class="mt-8 border-t border-slate-100 pt-5"><p class="text-sm font-bold text-slate-700">Batch status overview</p><div class="mt-4 space-y-4">@forelse ($data['batches'] as $batch)<div><div class="mb-1 flex justify-between text-xs"><span class="font-medium text-slate-600">{{ $batch->name }}</span><span class="font-bold text-slate-500">{{ $batch->status === 'in_training' ? 'In training' : 'Upcoming' }}</span></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full {{ $batch->status === 'in_training' ? 'bg-emerald-500' : 'bg-amber-500' }}" style="width: {{ $batch->status === 'in_training' ? '72' : '35' }}%"></div></div></div>@empty <p class="text-sm text-slate-400">No batch data yet.</p>@endforelse</div></div>
+            <div class="mt-8 border-t border-slate-100 pt-5">
+                <div class="flex items-baseline justify-between gap-2">
+                    <p class="text-sm font-bold text-slate-700">Batch status overview</p>
+                    <span class="text-xs text-slate-400">Real slot utilization</span>
+                </div>
+                <div class="mt-4 space-y-4">
+                    @forelse ($data['batches'] as $batch)
+                        @php($enrolled = (int) ($batch->applications_count ?? 0))
+                        @php($capacity = max(1, (int) $batch->capacity))
+                        @php($fillPercent = $batch->capacity > 0 ? min(100, (int) round(($enrolled / $capacity) * 100)) : 0)
+                        @php([$statusLabel, $badgeClass, $barClass] = match ($batch->status) {
+                            'in_training' => ['In training', 'bg-emerald-50 text-emerald-700', 'bg-emerald-500'],
+                            'completed' => ['Completed', 'bg-blue-50 text-blue-700', 'bg-blue-600'],
+                            'cancelled' => ['Cancelled', 'bg-rose-50 text-rose-700', 'bg-rose-500'],
+                            default => ['Upcoming', 'bg-amber-50 text-amber-700', 'bg-amber-500'],
+                        })
+                        <div>
+                            <div class="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                                <span class="truncate font-semibold text-slate-700">{{ $batch->name }}</span>
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <span class="text-slate-500">{{ $enrolled }}/{{ $batch->capacity ?? 0 }} ({{ $fillPercent }}%)</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-bold {{ $badgeClass }}">{{ $statusLabel }}</span>
+                                </div>
+                            </div>
+                            <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full transition-all duration-500 {{ $barClass }}" style="width: {{ $fillPercent }}%"></div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-sm text-slate-400">No batch data yet.</p>
+                    @endforelse
+                </div>
+            </div>
         </flux:card>
     </div>
 </div>

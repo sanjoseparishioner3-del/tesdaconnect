@@ -13,7 +13,8 @@
 <meta name="theme-color" content="#0f766e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<script defer src="{{ asset('pwa-register.js') }}" data-worker-url="{{ asset('service-worker.js') }}" data-worker-scope="{{ url('/') }}"></script>
+<script defer src="{{ asset('pwa-register.js') }}" data-worker-url="{{ asset('service-worker.js') }}" data-worker-scope="{{ url('/') }}" data-offline-url="{{ asset('offline.html') }}"></script>
+<script defer src="{{ asset('offline-app.js') }}" data-tesda-offline-script data-user-id="{{ auth()->id() ?? '' }}" data-user-email="{{ auth()->user()?->email ?? '' }}" data-snapshot-url="{{ route('offline-sync.snapshot') }}" data-mark-read-url="{{ route('offline-sync.announcements.mark-read') }}" data-verify-password-url="{{ route('offline-sync.verify-password') }}" data-offline-url="{{ asset('offline.html') }}" data-login-url="{{ route('login') }}"></script>
 <script defer src="{{ asset('offline-competency-sync.js') }}" data-sync-url="{{ route('offline-sync.competency-progress') }}" data-user-id="{{ auth()->id() ?? '' }}"></script>
 
 @fonts

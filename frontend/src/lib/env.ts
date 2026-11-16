@@ -1,0 +1,25 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  VITE_APP_NAME: z.string().default('TCTESDAConnect'),
+  VITE_SUPABASE_URL: z.string().url().optional().or(z.literal('')),
+  VITE_SUPABASE_ANON_KEY: z.string().optional().or(z.literal('')),
+  VITE_SENTRY_DSN: z.string().optional().or(z.literal('')),
+  VITE_SENTRY_ENVIRONMENT: z.string().default('development'),
+  VITE_OFFLINE_MAX_TTL_HOURS: z.coerce.number().int().min(1).max(72).default(12),
+});
+
+const parsed = envSchema.safeParse(import.meta.env);
+
+export const env = parsed.success
+  ? parsed.data
+  : {
+      VITE_APP_NAME: 'TCTESDAConnect',
+      VITE_SUPABASE_URL: '',
+      VITE_SUPABASE_ANON_KEY: '',
+      VITE_SENTRY_DSN: '',
+      VITE_SENTRY_ENVIRONMENT: 'development',
+      VITE_OFFLINE_MAX_TTL_HOURS: 12,
+    };
+
+export const isSupabaseConfigured = Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY);

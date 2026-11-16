@@ -3,12 +3,14 @@
  * learner documents, exports, or any other private/sensitive response.
  */
 const CACHE_PREFIX = 'tesda-connect-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const BASE_URL = new URL('./', self.location.href);
 const BASE_PATH = BASE_URL.pathname;
 const SHELL_FILES = [
     'offline.html',
+    'offline-app.js',
     'offline-competency-sync.js',
+    'offline-operational-documents.js',
     'manifest.webmanifest',
     'pwa-icon-192.png',
     'pwa-icon-512.png',
@@ -55,9 +57,9 @@ self.addEventListener('fetch', (event) => {
     if (url.origin !== self.location.origin) return;
     if (!url.pathname.startsWith(BASE_PATH)) return;
 
-    // Never intercept or cache Livewire, API, downloads, or private document paths.
+    // Never intercept or cache Livewire, API, offline-sync, downloads, or private document paths.
     const relativePath = url.pathname.slice(BASE_PATH.length).replace(/^\/+/, '');
-    if (/^(livewire|api|learner-documents|reports\/export|certificates\/)/i.test(relativePath)) return;
+    if (/^(livewire|api|offline-sync|learner-documents|reports\/export|certificates\/)/i.test(relativePath)) return;
 
     if (request.mode === 'navigate') {
         // Always try the network for authenticated pages. Do NOT cache the result.
@@ -71,7 +73,7 @@ self.addEventListener('fetch', (event) => {
     // Cache-first is limited to known public app-shell assets, never HTML/API data.
     const isPublicShellAsset =
         relativePath.startsWith('build/assets/') ||
-        /^(manifest\.webmanifest|offline-competency-sync\.js|pwa-icon-(192|512)\.png|favicon\.(ico|svg)|apple-touch-icon\.png)$/.test(relativePath);
+        /^(manifest\.webmanifest|offline-app\.js|offline-competency-sync\.js|offline-operational-documents\.js|pwa-icon-(192|512)\.png|favicon\.(ico|svg)|apple-touch-icon\.png)$/.test(relativePath);
     if (!isPublicShellAsset) return;
 
     event.respondWith((async () => {

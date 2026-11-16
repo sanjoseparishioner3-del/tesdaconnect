@@ -26,7 +26,19 @@
             :status="session('status')"
         />
 
-        <form method="POST" action="{{ route('login.store') }}" class="mt-7 flex flex-col gap-5">
+        <div data-offline-login-banner class="mt-5 hidden rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
+            <p data-offline-banner-title class="font-bold text-amber-200"></p>
+            <p data-offline-banner-desc class="mt-1 text-amber-100/90"></p>
+        </div>
+
+        <div data-offline-saved-accounts class="mt-4 hidden space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wider text-teal-300">Saved offline accounts on this device</p>
+            <div data-offline-account-list class="grid gap-2"></div>
+        </div>
+
+        <p data-offline-login-error class="mt-4 hidden rounded-xl border border-rose-300/40 bg-rose-500/20 px-4 py-3 text-sm text-rose-100"></p>
+
+        <form method="POST" action="{{ route('login.store') }}" data-tesda-login-form class="mt-7 flex flex-col gap-5">
             @csrf
 
             <flux:input
@@ -65,12 +77,16 @@
                 @endif
             </div>
 
-            <div class="rounded-lg border border-white/15 bg-white/5 px-3 py-3">
+            <div class="space-y-2.5 rounded-lg border border-white/15 bg-white/5 px-3 py-3">
                 <flux:checkbox
                     name="remember"
                     :label="__('Remember me on this device')"
                     :checked="old('remember')"
 class="[--flux-checkbox-label-color:#ffffff] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"                />
+                <label class="flex cursor-pointer items-center gap-2.5 text-sm text-white/95">
+                    <input type="checkbox" data-offline-enroll checked class="size-4 rounded border-white/30 bg-white text-teal-500 focus:ring-teal-400">
+                    <span>Enable offline sign-in &amp; announcements on this device</span>
+                </label>
             </div>
 
             <flux:button

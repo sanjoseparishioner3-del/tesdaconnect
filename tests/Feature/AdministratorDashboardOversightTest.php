@@ -1,11 +1,11 @@
 <?php
 
+use App\Models\Course;
 use App\Models\EnrollmentApplication;
 use App\Models\Institution;
 use App\Models\TrainingBatch;
 use App\Models\TrainingCertificate;
 use App\Models\User;
-use Livewire\Livewire;
 
 function createAdminDashboardInstitution(string $code): Institution
 {
@@ -59,7 +59,7 @@ test('administrator dashboard shows global quick stats and BST versus MIF compar
 test('administrator dashboard counts monthly intake and upcoming batch deadlines', function () {
     $administrator = User::factory()->create(['role' => 'administrator']);
     $bst = createAdminDashboardInstitution('BST');
-    $course = \App\Models\Course::create([
+    $course = Course::create([
         'institution_id' => $bst->id,
         'code' => 'DASH-COURSE',
         'name' => 'Dashboard Test Course',
@@ -96,4 +96,48 @@ test('non-administrator dashboard does not show global BST and MIF oversight', f
         ->assertOk()
         ->assertDontSee('System overview')
         ->assertDontSee('BST vs MIF comparison');
+});
+
+test('dashboard batch status overview computes fill percentage from actual enrolled records', function () {
+    $administrator = User::factory()->create(['role' => 'administrator']);
+    $bst = createAdminDashboardInstitution('BST');
+    $course = Course::create([
+        'institution_id' => $bst->id,
+        'code' => 'BATCH-FILL-COURSE',
+        'name' => 'Batch Fill Test Course',
+        'training_hours' => 120,
+        'is_active' => true,
+    ]);
+
+    $batch = TrainingBatch::create([
+        'institution_id' => $bst->id,
+        'course_id' => $course->id,
+        'code' => 'BATCH-FILL-01',
+        'name' => 'Batch Real Fill Check',
+        'capacity' => 10,
+        'starts_at' => today()->subDays(2)->toDateString(),
+        'ends_at' => today()->addDays(20)->toDateString(),
+        'status' => 'in_training',
+    ]);
+
+    foreach (range(1, 3) as $index) {
+        EnrollmentApplication::create([
+            'reference_no' => 'FILL-00'.$index,
+            'institution_id' => $bst->id,
+            'course_id' => $course->id,
+            'training_batch_id' => $batch->id,
+            'learner_name' => 'Learner '.$index,
+            'application_status' => 'confirmed',
+            'record_completeness' => 100,
+            'submitted_at' => now(),
+        ]);
+    }
+
+    $this->actingAs($administrator)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Batch Real Fill Check')
+        ->assertSee('3/10 (30%)')
+        ->assertSee('width: 30%', false)
+        ->assertDontSee('width: 72%', false);
 });
