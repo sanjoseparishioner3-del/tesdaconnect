@@ -564,7 +564,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
               <p>Generate, view, print, or download PDF with current Registration Inputs OR as a Blank Form for manual pen fill-up.</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             <Button
               type="button"
               size="sm"
@@ -573,8 +573,9 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                 setPreviewMode('filled');
                 setStep(4);
               }}
+              className="text-xs"
             >
-              <FileText className="h-3.5 w-3.5" /> View Filled Form
+              <FileText className="h-3.5 w-3.5" /> <span className="sm:hidden">Filled</span><span className="hidden sm:inline">View Filled Form</span>
             </Button>
             <Button
               type="button"
@@ -584,24 +585,27 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                 setPreviewMode('blank');
                 setStep(4);
               }}
+              className="text-xs"
             >
-              <Printer className="h-3.5 w-3.5" /> View Blank (Manual)
+              <Printer className="h-3.5 w-3.5" /> <span className="sm:hidden">Blank</span><span className="hidden sm:inline">View Blank (Manual)</span>
             </Button>
             <Button
               type="button"
               size="sm"
               variant="secondary"
               onClick={() => void downloadMis0301Pdf(form.getValues(), 'filled')}
+              className="text-xs"
             >
-              <Download className="h-3.5 w-3.5" /> Download Filled PDF
+              <Download className="h-3.5 w-3.5" /> <span className="sm:hidden">Filled PDF</span><span className="hidden sm:inline">Download Filled PDF</span>
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={() => void downloadMis0301Pdf(form.getValues(), 'blank')}
+              className="text-xs"
             >
-              <Download className="h-3.5 w-3.5" /> Download Blank PDF
+              <Download className="h-3.5 w-3.5" /> <span className="sm:hidden">Blank PDF</span><span className="hidden sm:inline">Download Blank PDF</span>
             </Button>
           </div>
         </CardContent>
@@ -678,18 +682,23 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       )}
 
       {/* Step tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STEPS.map((label, idx) => (
-          <Button
-            key={label}
-            type="button"
-            size="sm"
-            variant={step === idx ? 'secondary' : 'outline'}
-            onClick={() => setStep(idx)}
-          >
-            {label}
-          </Button>
-        ))}
+      <div className="flex snap-x overflow-x-auto gap-1.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {STEPS.map((label, idx) => {
+          const mobileLabels = ['1. Profile', '2. Address', '3. Demographics', '4. Course', '5. Preview'];
+          return (
+            <Button
+              key={label}
+              type="button"
+              size="sm"
+              variant={step === idx ? 'secondary' : 'outline'}
+              onClick={() => setStep(idx)}
+              className="shrink-0 snap-start text-xs whitespace-nowrap"
+            >
+              <span className="sm:hidden">{mobileLabels[idx]}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </Button>
+          );
+        })}
       </div>
 
       {step === 4 ? (
@@ -1133,28 +1142,28 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
                 Previous
               </Button>
               {step < 3 ? (
-                <Button type="button" variant="default" onClick={() => setStep((s) => s + 1)}>
+                <Button type="button" variant="default" size="sm" onClick={() => setStep((s) => s + 1)}>
                   Next Section
                 </Button>
               ) : (
-                <Button type="button" variant="outline" onClick={() => setStep(4)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setStep(4)}>
                   Preview Full MIS 03-01 Form
                 </Button>
               )}
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => void handleSaveDraftLocally()}>
+              <Button type="button" variant="outline" size="sm" onClick={() => void handleSaveDraftLocally()}>
                 <Save className="h-4 w-4" /> Save Draft Offline
               </Button>
-              <Button type="submit" variant="secondary">
-                <Send className="h-4 w-4" /> {isOnline ? 'Submit Registration Intake' : 'Queue Offline Submission'}
+              <Button type="submit" variant="secondary" size="sm">
+                <Send className="h-4 w-4" /> {isOnline ? 'Submit Registration' : 'Queue Offline'}
               </Button>
             </div>
           </div>

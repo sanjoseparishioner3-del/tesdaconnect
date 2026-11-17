@@ -329,15 +329,15 @@ export function AppLayoutFixed() {
         {/* MAIN CONTENT AREA - Independent scrolling */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* STICKY HEADER */}
-          <header className="no-print sticky top-0 z-30 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur-sm lg:px-5">
-            <div className="flex min-w-0 items-center gap-2.5">
+          <header className="no-print sticky top-0 z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5 lg:px-5">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="rounded-lg border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-100 lg:hidden"
+                className="shrink-0 rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-100 lg:hidden"
                 aria-label="Open navigation"
               >
-                <Menu className="h-4 w-4" />
+                <Menu className="h-5 w-5" />
               </button>
               
               {/* Desktop Sidebar Toggle */}
@@ -352,9 +352,9 @@ export function AppLayoutFixed() {
               </button>
 
               <div className="min-w-0">
-                <p className="text-[11px] font-medium text-slate-500">TESDA Training Operations</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-slate-900">
+                <p className="hidden text-[11px] font-medium text-slate-500 sm:block">TESDA Training Operations</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-[13px] font-semibold text-slate-900 sm:text-sm">
                     {profile?.institutions?.find((i) => i.institutionId === activeInstitutionId)?.name ??
                       profile?.institutions?.[0]?.name ??
                       'Unified Workspace'}
@@ -380,7 +380,7 @@ export function AppLayoutFixed() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               {isOfflineSession && <Badge variant="warning" className="text-[10px]">Offline</Badge>}
               <Badge
                 variant={
@@ -414,7 +414,7 @@ export function AppLayoutFixed() {
               >
                 <Lock className="h-3.5 w-3.5" />
               </Button>
-              <Button asChild type="button" size="sm" variant="ghost" className="h-7 px-2">
+              <Button asChild type="button" size="sm" variant="ghost" className="hidden h-7 px-2 sm:inline-flex">
                 <Link to="/settings/password">
                   <KeyRound className="h-3.5 w-3.5" />
                 </Link>
@@ -438,7 +438,7 @@ export function AppLayoutFixed() {
 
           {/* MAIN WORKSPACE - Independently scrollable */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden">
-            <div className="p-4 lg:p-6">
+            <div className="p-3 sm:p-4 lg:p-6">
               <Outlet />
             </div>
           </main>

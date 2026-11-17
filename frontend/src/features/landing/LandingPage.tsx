@@ -97,16 +97,16 @@ export function LandingPage() {
     <div className="min-h-screen bg-white text-[#0F172A] selection:bg-emerald-600 selection:text-white">
       {/* Fixed Institutional Navigation Header aligned to y=0 ScrollTrigger pin */}
       <header className="fixed inset-x-0 top-0 z-50 h-16 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <a href="#top" className="flex items-center gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 rounded-lg">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-extrabold text-white shadow-xs">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
+          <a href="#top" className="flex min-w-0 items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 sm:gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white shadow-xs sm:h-10 sm:w-10 sm:text-base">
               TC
             </div>
-            <div>
-              <p className="text-base font-bold tracking-tight text-slate-900">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold tracking-tight text-slate-900 sm:text-base">
                 TCTESDA<span className="text-emerald-600">Connect</span>
               </p>
-              <p className="text-xs text-slate-500">Training Operations Workflow Support</p>
+              <p className="hidden truncate text-xs text-slate-500 sm:block">Training Operations Workflow Support</p>
             </div>
           </a>
 
@@ -125,13 +125,14 @@ export function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <Button
               asChild
-              className="bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600"
+              className="h-9 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700 focus-visible:ring-emerald-600 sm:h-10 sm:px-4 sm:text-sm"
             >
               <Link to="/login" state={{ morphFromLaptop: true, preset }}>
-                Staff &amp; Scholar Login
+                <span className="sm:hidden">Login</span>
+                <span className="hidden sm:inline">Staff &amp; Scholar Login</span>
               </Link>
             </Button>
           </div>

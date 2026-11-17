@@ -48,7 +48,7 @@ export function LightweightLaptopMockup({ activePreset, children }: LightweightL
       </div>
 
       {/* Brushed Aluminum Base Lip */}
-      <div className="mx-auto h-3.5 w-[104%] -translate-x-[2%] rounded-b-xl bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-md">
+      <div className="mx-auto h-3.5 w-full rounded-b-xl bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-md">
         <div className="mx-auto h-1 w-16 rounded-b-full bg-slate-400/80" />
       </div>
     </div>

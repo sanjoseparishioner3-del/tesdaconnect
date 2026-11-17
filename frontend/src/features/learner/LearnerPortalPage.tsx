@@ -670,15 +670,15 @@ export function LearnerPortalPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-4 sm:space-y-6">
       {/* ================= HERO BANNER ================= */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-900 via-[#0f295c] to-teal-950 p-6 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-900 via-[#0f295c] to-teal-950 p-4 text-white shadow-xl sm:p-6">
         <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="absolute bottom-0 right-1/4 h-32 w-80 rounded-full bg-amber-400/10 blur-2xl" />
 
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white/20 bg-white/10 shadow-inner backdrop-blur-md">
+        <div className="relative z-10 flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white/20 bg-white/10 shadow-inner backdrop-blur-md sm:h-16 sm:w-16">
               {idPhotoUrl ? (
                 <img src={idPhotoUrl} alt={profile?.fullName ?? 'Scholar'} className="h-full w-full object-cover" />
               ) : (
@@ -692,9 +692,9 @@ export function LearnerPortalPage() {
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+                <h1 className="break-words text-xl font-black tracking-tight text-white sm:text-3xl">
                   {profile?.fullName ?? 'TESDA Scholar'}
                 </h1>
                 <span className="rounded-full bg-teal-400/20 px-2.5 py-0.5 text-xs font-semibold text-teal-200 ring-1 ring-inset ring-teal-400/30">
@@ -758,7 +758,7 @@ export function LearnerPortalPage() {
         </div>
 
         {/* Quick KPI Cards Grid */}
-        <div className="relative z-10 mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="relative z-10 mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-4 sm:gap-3">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
             <p className="text-[11px] font-medium text-slate-300">Enrollment Status</p>
             <p className="mt-1 text-sm font-bold uppercase tracking-wider text-teal-300">
@@ -818,62 +818,42 @@ export function LearnerPortalPage() {
       </div>
 
       {/* ================= NAVIGATION TABS ================= */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <Button
-          type="button"
-          size="sm"
-          variant={tab === 'overview' ? 'default' : 'outline'}
-          onClick={() => setTab('overview')}
-          className={tab === 'overview' ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : ''}
+      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-3 sm:pt-0">
+        <div
+          role="tablist"
+          aria-label="Scholar portal sections"
+          className="flex snap-x items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:pb-0 [&::-webkit-scrollbar]:hidden"
         >
-          <IdCard className="mr-1.5 h-3.5 w-3.5" />
-          Overview &amp; Digital System ID
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={tab === 'intake' ? 'default' : 'outline'}
-          onClick={() => setTab('intake')}
-          className={tab === 'intake' ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : ''}
-        >
-          <FileText className="mr-1.5 h-3.5 w-3.5" />
-          Registration Inputs &amp; MIS 03-01
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={tab === 'requirements' ? 'default' : 'outline'}
-          onClick={() => setTab('requirements')}
-          className={tab === 'requirements' ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : ''}
-        >
-          <Upload className="mr-1.5 h-3.5 w-3.5" />
-          Important Documents (8)
-          {uploadedTypesCount > 0 && (
-            <span className="ml-1.5 rounded-full bg-teal-600 px-1.5 py-0.2 text-[10px] text-white">
-              {uploadedTypesCount}/8
-            </span>
-          )}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={tab === 'progress' ? 'default' : 'outline'}
-          onClick={() => setTab('progress')}
-          className={tab === 'progress' ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : ''}
-        >
-          <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-          Progress &amp; Achievement Charts
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={tab === 'schedules' ? 'default' : 'outline'}
-          onClick={() => setTab('schedules')}
-          className={tab === 'schedules' ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : ''}
-        >
-          <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-          Schedules &amp; Announcements
-        </Button>
+          {(
+            [
+              { key: 'overview', Icon: IdCard, full: 'Overview & Digital System ID', short: 'Overview & ID' },
+              { key: 'intake', Icon: FileText, full: 'Registration Inputs & MIS 03-01', short: 'MIS 03-01' },
+              { key: 'requirements', Icon: Upload, full: 'Important Documents (8)', short: 'Documents' },
+              { key: 'progress', Icon: ClipboardCheck, full: 'Progress & Achievement Charts', short: 'Progress' },
+              { key: 'schedules', Icon: CalendarDays, full: 'Schedules & Announcements', short: 'Schedules' },
+            ] as const
+          ).map(({ key, Icon, full, short }) => (
+            <Button
+              key={key}
+              type="button"
+              size="sm"
+              role="tab"
+              aria-selected={tab === key}
+              variant={tab === key ? 'default' : 'outline'}
+              onClick={() => setTab(key)}
+              className={`shrink-0 snap-start whitespace-nowrap ${tab === key ? 'bg-[#0f295c] text-white hover:bg-[#143a77]' : 'bg-white'}`}
+            >
+              <Icon className="mr-1.5 h-3.5 w-3.5" />
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{full}</span>
+              {key === 'requirements' && uploadedTypesCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
+                  {uploadedTypesCount}/8
+                </span>
+              )}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* ================= TAB 1: OVERVIEW & DIGITAL ID ================= */}
@@ -898,7 +878,7 @@ export function LearnerPortalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
                 {/* Step 1 */}
                 <div
                   onClick={() => setTab('intake')}
@@ -998,11 +978,11 @@ export function LearnerPortalPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-12">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
             {/* Left Column: Academic & Enrollment Details */}
-            <div className="space-y-4 lg:col-span-7">
+            <div className="min-w-0 space-y-4 lg:col-span-7">
               {/* Reference & Scholar ID Cards */}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Card className="border-slate-200 transition-shadow hover:shadow-md">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1268,21 +1248,21 @@ export function LearnerPortalPage() {
         <div className="space-y-6">
           {/* Document Preview Lightbox Modal */}
           {previewDoc && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-                  <div className="flex items-center gap-2 overflow-hidden">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="relative flex max-h-[95vh] sm:max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5 sm:px-5 sm:py-3">
+                  <div className="flex items-center gap-2 overflow-hidden min-w-0">
                     <FileText className="h-5 w-5 shrink-0 text-teal-700" />
-                    <span className="truncate text-sm font-bold text-slate-900">{previewDoc.name}</span>
+                    <span className="truncate text-xs sm:text-sm font-bold text-slate-900">{previewDoc.name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <a
                       href={previewDoc.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 transition hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 sm:px-3 py-1 text-xs font-semibold text-teal-800 transition hover:bg-slate-50"
                     >
-                      <ExternalLink className="h-3.5 w-3.5" /> Open Full
+                      <ExternalLink className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Open Full</span>
                     </a>
                     <Button
                       type="button"
@@ -1295,7 +1275,7 @@ export function LearnerPortalPage() {
                     </Button>
                   </div>
                 </div>
-                <div className="flex-1 overflow-auto p-4">
+                <div className="flex-1 overflow-auto p-2 sm:p-4">
                   {previewDoc.mime.startsWith('image/') ? (
                     <img
                       src={previewDoc.url}
@@ -1679,18 +1659,20 @@ export function LearnerPortalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-xl border border-slate-200 p-2">
-                <FullCalendar
-                  plugins={[dayGridPlugin, timeGridPlugin]}
-                  initialView="dayGridMonth"
-                  headerToolbar={{
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek',
-                  }}
-                  events={studentCalendarEvents}
-                  height="auto"
-                />
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-200 p-2 sm:p-4">
+                <div className="min-w-[550px] sm:min-w-0">
+                  <FullCalendar
+                    plugins={[dayGridPlugin, timeGridPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={{
+                      left: 'prev,next today',
+                      center: 'title',
+                      right: 'dayGridMonth,timeGridWeek',
+                    }}
+                    events={studentCalendarEvents}
+                    height="auto"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -334,7 +334,7 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
       </div>
 
       {/* Quick Verification Metrics Strip */}
-      <div className="grid max-w-lg grid-cols-3 gap-3 border-t border-slate-200 pt-4 text-xs">
+      <div className="grid max-w-lg grid-cols-3 gap-2 border-t border-slate-200 pt-4 text-[11px] sm:gap-3 sm:text-xs">
         <div>
           <p className="font-bold text-slate-900">MIS 03-01 Ready</p>
           <p className="text-slate-500">Filled &amp; blank PDFs</p>
@@ -491,9 +491,9 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
       className="bg-white pb-12 pt-24 sm:pb-16 sm:pt-28"
     >
       <div className="mx-auto max-w-7xl space-y-12 px-4 sm:px-6">
-        <div className="grid items-center gap-10 lg:grid-cols-12">
-          <div className="lg:col-span-6">{heroCopyContent}</div>
-          <div className="simplified-laptop-stage lg:col-span-6">
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
+          <div className="min-w-0 lg:col-span-6">{heroCopyContent}</div>
+          <div className="simplified-laptop-stage min-w-0 lg:col-span-6">
             <LightweightLaptopMockup activePreset={activePreset}>
               <ExpandedDashboardPreview
                 activePreset={activePreset}

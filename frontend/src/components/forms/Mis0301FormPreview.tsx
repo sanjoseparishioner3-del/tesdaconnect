@@ -76,8 +76,9 @@ export function Mis0301FormPreview({ values, mode, onModeChange, onClose }: Mis0
         </div>
       </div>
 
-      {/* PAGE 1 */}
-      <div className="mx-auto max-w-[820px] border-2 border-slate-800 bg-white p-4 text-slate-900 shadow-sm print:shadow-none">
+      {/* PAGE 1 & 2 PREVIEW WRAPPER (Responsive horizontal scrolling on mobile to keep official A4 table geometry) */}
+      <div className="w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-100/60 p-2 sm:p-4">
+        <div className="mx-auto min-w-[760px] max-w-[820px] border-2 border-slate-800 bg-white p-4 text-slate-900 shadow-sm print:min-w-0 print:border-none print:shadow-none">
         <div className="grid grid-cols-12 border border-slate-800 text-center">
           <div className="col-span-2 flex items-center justify-center border-r border-slate-800 p-2">
             <img
@@ -458,6 +459,7 @@ export function Mis0301FormPreview({ values, mode, onModeChange, onClose }: Mis0
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

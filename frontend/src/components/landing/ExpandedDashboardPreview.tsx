@@ -61,7 +61,7 @@ export const ExpandedDashboardPreview = React.forwardRef<HTMLDivElement, Expande
           </div>
         </div>
 
-        <div className={cn('grid bg-white', compact ? 'grid-cols-1' : 'md:grid-cols-[200px_1fr]')}>
+        <div className={cn('grid grid-cols-1 bg-white', compact ? '' : 'md:grid-cols-[200px_minmax(0,1fr)]')}>
           {/* Flat Non-Collapsible Institutional Sidebar Preview */}
           {!compact && (
             <aside className="hidden flex-col justify-between bg-[#0f295c] p-3.5 text-slate-100 md:flex">
@@ -103,7 +103,7 @@ export const ExpandedDashboardPreview = React.forwardRef<HTMLDivElement, Expande
           )}
 
           {/* Main Dashboard Workspace Preview */}
-          <div className={cn('space-y-4 bg-white', compact ? 'p-4' : 'p-5')}>
+          <div className={cn('min-w-0 space-y-4 bg-white', compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5')}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-bold tracking-wider text-emerald-700 uppercase">
@@ -149,11 +149,11 @@ export const ExpandedDashboardPreview = React.forwardRef<HTMLDivElement, Expande
             </div>
 
             {/* Bottom Two-Column Preview */}
-            <div className="grid gap-3 lg:grid-cols-[1.35fr_.65fr]">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                    <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.35fr_.65fr]">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+                  <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                     Active TESDA Operational Pipeline
                   </span>
                   <span className="text-[10px] font-semibold text-emerald-700">MIS 03-01 Verified</span>
@@ -176,7 +176,7 @@ export const ExpandedDashboardPreview = React.forwardRef<HTMLDivElement, Expande
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <div className="flex min-w-0 flex-col justify-between rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                     <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
