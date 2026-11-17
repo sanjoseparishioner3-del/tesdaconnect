@@ -33,6 +33,23 @@ Copy `frontend/.env.example` to `frontend/.env.local` for local development or i
    npx supabase functions deploy offline-sync
    ```
 5. Verify RLS coverage via `supabase/tests/rls_verification.sql`.
+6. *(Optional, for demos/testing)* Create one demo account per role plus sample data
+   (batch `DEMO-SMAW-B1`, a confirmed scholar enrollment, an applicant draft, a trainer
+   assignment and a published announcement). Run it on your own machine with the
+   **service role** key from Supabase → Project Settings → API. Never commit that key or
+   put it in `frontend/`.
+   ```powershell
+   $env:SUPABASE_URL="https://<project-ref>.supabase.co"
+   $env:SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"
+   node supabase/scripts/seed-demo-accounts.mjs            # dry run: shows the plan
+   node supabase/scripts/seed-demo-accounts.mjs --apply    # creates accounts, prints passwords once
+   ```
+   - Accounts are `demo.<role>@tesda-connect.local` (`--email-domain` to change it):
+     `sysadmin`, `instadmin`, `registrar`, `focal`, `trainer`, `scholar`, `applicant`.
+   - Passwords are random and shown **only once** in the terminal. Re-running keeps
+     existing passwords; `--reset-passwords` issues new ones.
+   - After the demo, disable them: `node supabase/scripts/seed-demo-accounts.mjs --apply --deactivate`.
+   - Tests: `node --test supabase/scripts/seed-demo-accounts.test.mjs`.
 
 ---
 
