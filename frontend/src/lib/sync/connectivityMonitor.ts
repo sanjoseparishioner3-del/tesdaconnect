@@ -84,13 +84,13 @@ export async function refreshReactiveQueueCounts(userId?: string): Promise<{
   }
 
   try {
-    const [outboxRows, queuedDocCount, conflictCount] = await Promise.all([
+    const [outboxRows, queuedDocs, conflictCount] = await Promise.all([
       offlineDb.syncOutbox.where('userId').equals(userId).toArray(),
       offlineDb.cachedDocuments
         .where('ownerUserId')
         .equals(userId)
         .filter((doc) => doc.queuedUpload === true)
-        .count(),
+        .toArray(),
       offlineDb.conflicts
         .where('userId')
         .equals(userId)
@@ -101,7 +101,10 @@ export async function refreshReactiveQueueCounts(userId?: string): Promise<{
     const pendingOutbox = outboxRows.filter(
       (row) => row.status === 'pending' || row.status === 'syncing',
     ).length;
-    const failedCount = outboxRows.filter((row) => row.status === 'failed').length;
+    // Documents kept on the device: failed ones need attention, the rest are waiting to send.
+    const failedDocCount = queuedDocs.filter((doc) => doc.uploadState === 'failed').length;
+    const queuedDocCount = queuedDocs.length - failedDocCount;
+    const failedCount = outboxRows.filter((row) => row.status === 'failed').length + failedDocCount;
     const pendingCount = pendingOutbox + queuedDocCount;
 
     useConnectivityStore.getState().setQueueCounts({

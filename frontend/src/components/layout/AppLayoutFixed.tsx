@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
-import { OfflineReadyBadge } from '@/components/pwa/OfflineReadyBadge';
+import { SyncStatusIndicator } from '@/components/sync/SyncStatusIndicator';
 import { purgeOfflineUserData } from '@/lib/db/dexie';
 import { FLAT_SIDEBAR_ITEMS, type NavItemConfig, type NavSection } from '@/lib/rbac';
 import { ROLE_LABELS } from '@/types/auth';
@@ -77,7 +77,6 @@ export function AppLayoutFixed() {
   const profile = useAuthStore((s) => s.profile);
   const activeInstitutionId = useAuthStore((s) => s.activeInstitutionId);
   const setActiveInstitution = useAuthStore((s) => s.setActiveInstitution);
-  const isOfflineSession = useAuthStore((s) => s.isOfflineSession);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const {
     isOnline,
@@ -401,30 +400,8 @@ export function AppLayoutFixed() {
 
             <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               <InstallAppButton className="hidden md:inline-flex" />
-              <OfflineReadyBadge compact />
-              {isOfflineSession && <Badge variant="warning" className="text-[10px]">Offline</Badge>}
-              <Badge
-                variant={
-                  !isOnline ||
-                  syncStatus === 'reauth_required' ||
-                  conflictCount > 0 ||
-                  failedCount > 0 ||
-                  pendingCount > 0
-                    ? 'warning'
-                    : 'success'
-                }
-                className="text-[10px]"
-              >
-                {!isOnline
-                  ? pendingCount > 0
-                    ? `${pendingCount} Pending`
-                    : 'Cached'
-                  : conflictCount > 0
-                    ? `${conflictCount} Conflict`
-                    : pendingCount > 0
-                      ? `${pendingCount} Pending`
-                      : 'Synced'}
-              </Badge>
+              {/* One status indicator: Offline / Syncing / Pending / Action required / Up to date. */}
+              <SyncStatusIndicator />
               <Button
                 type="button"
                 size="sm"

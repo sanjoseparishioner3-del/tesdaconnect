@@ -1,5 +1,6 @@
 import { refreshOfflineCachesForUser } from '@/lib/authProfile';
 import { offlineDb, safeDexieWrite } from '@/lib/db/dexie';
+import { processDocumentUploadQueue } from '@/lib/documents/uploadQueue';
 import { offlineExpiryIsoForRole } from '@/lib/offline/offlinePolicy';
 import { getSupabaseClient } from '@/lib/supabase';
 import {
@@ -216,92 +217,14 @@ export function buildLearnerDocumentStoragePath(
 }
 
 /**
- * Uploads learner documents that were saved on this device while offline: pushes the
- * blob to Storage, inserts the `learner_documents` row, then swaps the local-only cache
- * entry for one keyed by the server id so it is not listed twice.
+ * Sends documents saved on this device through the local-first upload queue
+ * (lib/documents/uploadQueue): single-flight, resumable, idempotent, with progress.
  */
 export async function flushQueuedOfflineDocuments(userId: string): Promise<number> {
-  const client = getSupabaseClient();
-  if (!client) return 0;
-
-  const { data: sessionRes } = await client.auth.getSession();
-  if (!sessionRes.session?.access_token) return 0;
-
-  const queuedDocs = await offlineDb.cachedDocuments
-    .where('ownerUserId')
-    .equals(userId)
-    .filter((d) => d.queuedUpload === true && Boolean(d.blob))
-    .toArray();
-
   const fallbackInstitutionId = useAuthStore
     .getState()
     .profile?.institutions?.find((inst) => UUID_PATTERN.test(inst.institutionId))?.institutionId;
-
-  let uploaded = 0;
-  for (const doc of queuedDocs) {
-    if (!doc.blob) continue;
-
-    let storagePath = doc.storagePath;
-    let institutionId = doc.institutionId;
-    if (!storagePath) {
-      if (!UUID_PATTERN.test(institutionId) && fallbackInstitutionId) {
-        institutionId = fallbackInstitutionId;
-      }
-      storagePath = buildLearnerDocumentStoragePath(institutionId, doc.targetUserId, doc.originalName);
-      if (!storagePath) continue;
-      // Persist the chosen path first so a retry after a partial failure reuses it.
-      await offlineDb.cachedDocuments.update(doc.id, { storagePath, institutionId });
-    }
-
-    const { error: upErr } = await client.storage.from('learner-documents').upload(storagePath, doc.blob, {
-      contentType: doc.mimeType,
-      upsert: false,
-    });
-
-    if (upErr && !upErr.message.toLowerCase().includes('already exists')) {
-      continue;
-    }
-
-    const { data: insertedRows, error: insErr } = await client
-      .from('learner_documents')
-      .insert({
-        user_id: doc.targetUserId,
-        document_type: doc.documentType,
-        storage_path: storagePath,
-        original_name: doc.originalName,
-        mime_type: doc.mimeType,
-        size_bytes: doc.sizeBytes,
-      })
-      .select('id')
-      .returns<Array<{ id: string }>>();
-
-    if (insErr) continue;
-
-    const serverId = insertedRows?.[0]?.id;
-    const syncedAt = new Date().toISOString();
-    if (serverId && serverId !== doc.id) {
-      await offlineDb.transaction('rw', offlineDb.cachedDocuments, async () => {
-        await offlineDb.cachedDocuments.delete(doc.id);
-        await offlineDb.cachedDocuments.put({
-          ...doc,
-          id: serverId,
-          institutionId,
-          storagePath,
-          queuedUpload: false,
-          syncedAt,
-        });
-      });
-    } else {
-      await offlineDb.cachedDocuments.update(doc.id, {
-        storagePath,
-        institutionId,
-        queuedUpload: false,
-        syncedAt,
-      });
-    }
-    uploaded += 1;
-  }
-
+  const uploaded = await processDocumentUploadQueue(userId, { fallbackInstitutionId });
   await refreshReactiveQueueCounts(userId);
   return uploaded;
 }

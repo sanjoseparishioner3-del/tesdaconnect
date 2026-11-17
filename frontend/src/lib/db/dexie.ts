@@ -138,7 +138,25 @@ export interface CachedDocumentRecord {
   blob?: Blob;
   queuedUpload: boolean;
   syncedAt: string;
+  /** Local upload pipeline state for files saved on this device (see lib/documents/uploadQueue). */
+  uploadState?: DocumentUploadState;
+  uploadError?: string | null;
+  retryCount?: number;
+  nextAttemptAt?: string | null;
+  /** SHA-256 of the stored file: integrity check and duplicate prevention. */
+  contentHash?: string | null;
+  createdAt?: string;
 }
+
+/**
+ * saved_offline   kept on the device, not queued (e.g. upload cancelled by the user)
+ * pending         queued; uploads automatically when the server is reachable
+ * uploading       transfer in progress
+ * failed          last attempt failed; retried automatically with backoff
+ * auth_required   needs an online sign-in before it can be sent
+ * submitted       confirmed by the server (row exists in learner_documents)
+ */
+export type DocumentUploadState = 'saved_offline' | 'pending' | 'uploading' | 'failed' | 'auth_required' | 'submitted';
 
 export interface CachedCompetencyChartRecord {
   id: string;

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isNetworkOrServerOutage } from '@/features/auth/authErrors';
 import { offlineDb, pruneExpiredOfflineData } from '@/lib/db/dexie';
 import { saveOfflineUnlockCredential, verifyOfflineUnlockCredential } from '@/lib/offline/offlineAuth';
-import { buildLearnerDocumentStoragePath, flushQueuedOfflineDocuments } from '@/lib/sync/supabaseTransport';
+import { buildLearnerDocumentStoragePath } from '@/lib/sync/supabaseTransport';
 import { useAuthStore } from '@/stores/authStore';
 import type { UserProfile } from '@/types/auth';
 
@@ -99,69 +99,5 @@ describe('Phase 1 offline hardening', () => {
     expect(buildLearnerDocumentStoragePath('global', 'uid-1', 'a.pdf')).toBeNull();
     expect(buildLearnerDocumentStoragePath('BST', 'uid-1', 'a.pdf')).toBeNull();
   });
-
-  it('uploads documents saved offline (no storage path yet) and replaces the local entry with the server id', async () => {
-    mockUpload.mockResolvedValue({ error: null });
-    mockInsertSelect.mockResolvedValue({ data: [{ id: 'server-doc-1' }], error: null });
-
-    await offlineDb.cachedDocuments.put({
-      id: 'local-doc-1',
-      ownerUserId: 'uid-scholar',
-      targetUserId: 'uid-scholar',
-      institutionId: INST_ID,
-      documentType: 'psa_birth_certificate',
-      originalName: 'psa.pdf',
-      mimeType: 'application/pdf',
-      sizeBytes: 1234,
-      status: 'pending',
-      remarks: null,
-      storagePath: null,
-      blob: new Blob(['pdf']),
-      queuedUpload: true,
-      syncedAt: new Date().toISOString(),
-    });
-
-    const uploaded = await flushQueuedOfflineDocuments('uid-scholar');
-
-    expect(uploaded).toBe(1);
-    expect(mockUpload).toHaveBeenCalledTimes(1);
-    const uploadedPath = mockUpload.mock.calls[0]?.[0] as string;
-    expect(uploadedPath.startsWith(`${INST_ID}/uid-scholar/`)).toBe(true);
-    expect(insertedPayloads[0]).not.toHaveProperty('institution_id');
-
-    const docs = await offlineDb.cachedDocuments.toArray();
-    expect(docs).toHaveLength(1);
-    expect(docs[0]?.id).toBe('server-doc-1');
-    expect(docs[0]?.queuedUpload).toBe(false);
-    expect(docs[0]?.storagePath).toBe(uploadedPath);
-  });
-
-  it('falls back to the signed-in profile institution when the document was saved without one', async () => {
-    mockUpload.mockResolvedValue({ error: null });
-    mockInsertSelect.mockResolvedValue({ data: [{ id: 'server-doc-2' }], error: null });
-    useAuthStore
-      .getState()
-      .setProfile(profileFor('uid-scholar', 'juan@bst.tesda.ph', 'scholar'), { isOfflineSession: false });
-
-    await offlineDb.cachedDocuments.put({
-      id: 'local-doc-2',
-      ownerUserId: 'uid-scholar',
-      targetUserId: 'uid-scholar',
-      institutionId: 'global',
-      documentType: 'id_picture',
-      originalName: 'id.jpg',
-      mimeType: 'image/jpeg',
-      sizeBytes: 10,
-      status: 'pending',
-      remarks: null,
-      storagePath: null,
-      blob: new Blob(['jpg']),
-      queuedUpload: true,
-      syncedAt: new Date().toISOString(),
-    });
-
-    expect(await flushQueuedOfflineDocuments('uid-scholar')).toBe(1);
-    const doc = await offlineDb.cachedDocuments.get('server-doc-2');
-    expect(doc?.institutionId).toBe(INST_ID);
-  });
+  // Offline document upload behaviour is covered in tests/document-upload-queue.test.ts.
 });

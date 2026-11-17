@@ -20,6 +20,7 @@ import { Pagination, usePagination } from '@/components/ui/pagination';
 import { offlineDb, purgeOfflineUserData, type SyncConflictRecord } from '@/lib/db/dexie';
 import { refreshReactiveQueueCounts, verifyServerReachability } from '@/lib/sync/connectivityMonitor';
 import { triggerForegroundSync } from '@/lib/sync/supabaseTransport';
+import { DeviceStatusCard } from '@/components/sync/DeviceStatusCard';
 import { resolveConflictManually, sanitizeLegacySyncOutbox } from '@/lib/sync/syncEngine';
 import { formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -190,7 +191,7 @@ export function OfflineSyncPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Automatic Sync Center &amp; Offline Queue</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Sync Center</h1>
           <p className="text-sm text-slate-500">
             Authorized role data prepares automatically at sign-in and synchronizes seamlessly upon reconnect without manual activation.
           </p>
@@ -231,6 +232,8 @@ export function OfflineSyncPage() {
           </CardContent>
         </Card>
       )}
+
+      {userId && <DeviceStatusCard userId={userId} />}
 
       {storageWarning && (
         <Card className="border-amber-300 bg-amber-50">
