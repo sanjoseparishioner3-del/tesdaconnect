@@ -425,7 +425,8 @@ export function LearnerPortalPage() {
 
   return (
     <div className="min-w-0 space-y-4 sm:space-y-6">
-      {/* ================= HERO BANNER ================= */}
+      {/* ================= HERO BANNER (Home only: other sections start with their own content) ================= */}
+      {tab === 'overview' && (
       <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-900 via-[#0f295c] to-teal-950 p-4 text-white shadow-xl sm:p-6">
         <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="absolute bottom-0 right-1/4 h-32 w-80 rounded-full bg-amber-400/10 blur-2xl" />
@@ -572,6 +573,7 @@ export function LearnerPortalPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ================= NAVIGATION TABS ================= */}
       {/* Phones use the bottom tab bar (LearnerBottomNav); tablets and desktop use these tabs. */}
