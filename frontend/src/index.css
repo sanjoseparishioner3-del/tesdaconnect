@@ -208,3 +208,24 @@
     animation: none !important;
   }
 }
+
+/*
+ * Phones: form fields at 16px so iOS Safari does not auto-zoom on focus.
+ * Deliberately unlayered so it outranks Tailwind's layered text-sm/text-xs utilities.
+ */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Compact FullCalendar toolbar on narrow screens. */
+  .fc .fc-toolbar-title {
+    font-size: 1rem;
+  }
+  .fc .fc-button {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.8rem;
+  }
+}

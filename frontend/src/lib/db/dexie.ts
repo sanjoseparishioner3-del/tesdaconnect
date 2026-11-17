@@ -336,7 +336,7 @@ export async function purgeOtherUsersCachedData(
 
       await Promise.all([
         db.offlineVault
-          .filter((row) => row.userId !== activeUserId && !row.email.endsWith('@tesdaconnect.test'))
+          .filter((row) => row.userId !== activeUserId)
           .delete(),
         db.cachedAnnouncements.filter((row) => row.userId !== activeUserId).delete(),
         db.cachedSchedules.filter((row) => row.userId !== activeUserId).delete(),
@@ -360,7 +360,15 @@ export async function purgeOtherUsersCachedData(
 }
 
 /**
+ * Email domain of the hard-coded demo accounts that older builds seeded into the
+ * offline vault with well-known passwords. Any such record left on a device is a
+ * login backdoor, so it is always purged.
+ */
+export const LEGACY_DEMO_EMAIL_DOMAIN = '@tesdaconnect.test';
+
+/**
  * Enforces retention policies for cached credentials, expired announcements, and old logs.
+ * Also removes legacy demo-account vault records seeded by older builds.
  */
 export async function pruneExpiredOfflineData(
   db: TesdaConnectOfflineDb = offlineDb,
@@ -376,7 +384,11 @@ export async function pruneExpiredOfflineData(
     async () => {
       await Promise.all([
         db.offlineVault
-          .filter((row) => new Date(row.expiresAt).getTime() <= nowMs)
+          .filter(
+            (row) =>
+              new Date(row.expiresAt).getTime() <= nowMs ||
+              row.email.toLowerCase().endsWith(LEGACY_DEMO_EMAIL_DOMAIN),
+          )
           .delete(),
         db.cachedAnnouncements
           .filter((row) => Boolean(row.expiresAt && row.expiresAt <= nowIso))

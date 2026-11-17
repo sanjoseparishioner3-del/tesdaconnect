@@ -70,7 +70,8 @@ describe('Trainee Intake Completeness & Report Exports', () => {
     const pdfBytes = await buildTraineeReportPdf(sampleRows, meta);
     const pdfHeader = new TextDecoder().decode(pdfBytes.slice(0, 5));
     expect(pdfHeader).toBe('%PDF-');
-  });
+    // exceljs (~1 MB) is now loaded on demand, which can exceed the 5 s default under a busy parallel run.
+  }, 20_000);
 
   it('generates 2-page official MIS 03-01 (ver. 2021) PDFs in both filled and blank modes', async () => {
     const sampleIntake = {

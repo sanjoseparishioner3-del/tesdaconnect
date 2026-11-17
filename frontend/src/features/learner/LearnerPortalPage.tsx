@@ -1,6 +1,7 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -30,6 +31,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,11 +42,14 @@ import { Pagination, usePagination } from '@/components/ui/pagination';
 import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { RegistrationIntakeWorkspace } from '@/features/intake/RegistrationIntakeWorkspace';
 import { DigitalSystemIdCard } from '@/features/learner/DigitalSystemIdCard';
+import { DEFAULT_LEARNER_TAB, parseLearnerTab, type LearnerTab } from '@/features/learner/learnerTabs';
 import { offlineDb } from '@/lib/db/dexie';
 import { normalizeDocumentTypeKey, TESDA_REQUIRED_DOCUMENTS } from '@/lib/documents/requiredDocuments';
+import { PHONE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
 import { generateStableId } from '@/lib/sync/syncEngine';
+import { buildLearnerDocumentStoragePath } from '@/lib/sync/supabaseTransport';
 import { asText, formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
@@ -94,7 +99,20 @@ export function LearnerPortalPage() {
   const queryClient = useQueryClient();
   const userId = profile?.id ?? '';
 
-  const [tab, setTab] = React.useState<'overview' | 'intake' | 'requirements' | 'progress' | 'schedules'>('overview');
+  const isPhone = useMediaQuery(PHONE_MEDIA_QUERY);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = parseLearnerTab(searchParams.get('tab'));
+  const setTab = React.useCallback(
+    (next: LearnerTab) => {
+      setSearchParams(next === DEFAULT_LEARNER_TAB ? {} : { tab: next });
+    },
+    [setSearchParams],
+  );
+
+  // Switching sections (tabs here or the phone bottom bar) starts at the top of the page.
+  React.useEffect(() => {
+    document.querySelector('main')?.scrollTo({ top: 0 });
+  }, [tab]);
   const [docType, setDocType] = React.useState<string>(TESDA_REQUIRED_DOCUMENTS[0]?.key ?? 'registration_form');
   const [docFile, setDocFile] = React.useState<File | null>(null);
   const [previewDoc, setPreviewDoc] = React.useState<{ url: string; name: string; mime: string } | null>(null);
@@ -416,15 +434,17 @@ export function LearnerPortalPage() {
       try {
         const session = client ? (await client.auth.getSession()).data.session : null;
         if (isOnline && client && isSupabaseConfigured && session?.user && instId !== 'global') {
-          const safeName = docFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          cloudStoragePath = `${instId}/${profile.id}/${Date.now()}_${safeName}`;
-
+          cloudStoragePath = buildLearnerDocumentStoragePath(instId, profile.id, docFile.name);
+        }
+        if (cloudStoragePath && client) {
           const { error: uploadErr } = await client.storage.from('learner-documents').upload(cloudStoragePath, docFile, {
             contentType: docFile.type || 'application/octet-stream',
             upsert: false,
           });
 
           if (!uploadErr) {
+            // Remember the uploaded path so a later sync retry reuses it instead of re-uploading.
+            await offlineDb.cachedDocuments.update(localDocId, { storagePath: cloudStoragePath });
             const { data: insertedRows, error: insertErr } = await client
               .from('learner_documents')
               .insert({
@@ -821,7 +841,8 @@ export function LearnerPortalPage() {
       </div>
 
       {/* ================= NAVIGATION TABS ================= */}
-      <div className="sticky top-0 z-20 -mx-3 border-b border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-3 sm:pt-0">
+      {/* Phones use the bottom tab bar (LearnerBottomNav); tablets and desktop use these tabs. */}
+      <div className="hidden pb-3 md:block">
         <div
           role="tablist"
           aria-label="Scholar portal sections"
@@ -1662,20 +1683,22 @@ export function LearnerPortalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="w-full overflow-x-auto rounded-xl border border-slate-200 p-2 sm:p-4">
-                <div className="min-w-[550px] sm:min-w-0">
-                  <FullCalendar
-                    plugins={[dayGridPlugin, timeGridPlugin]}
-                    initialView="dayGridMonth"
-                    headerToolbar={{
-                      left: 'prev,next today',
-                      center: 'title',
-                      right: 'dayGridMonth,timeGridWeek',
-                    }}
-                    events={studentCalendarEvents}
-                    height="auto"
-                  />
-                </div>
+              <div className="w-full rounded-xl border border-slate-200 p-2 sm:p-4">
+                {/* Phones get an agenda list (no sideways scrolling); larger screens keep the grid. */}
+                <FullCalendar
+                  key={isPhone ? 'phone' : 'wide'}
+                  plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
+                  initialView={isPhone ? 'listMonth' : 'dayGridMonth'}
+                  headerToolbar={
+                    isPhone
+                      ? { left: 'prev,next', center: 'title', right: 'today' }
+                      : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listMonth' }
+                  }
+                  buttonText={{ listMonth: 'list' }}
+                  noEventsContent="No classes or deadlines this month."
+                  events={studentCalendarEvents}
+                  height="auto"
+                />
               </div>
             </CardContent>
           </Card>

@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export interface ReportMetadata {
@@ -38,6 +37,9 @@ export async function buildTraineeReportWorkbook(
   rows: TraineeSummaryRow[],
   meta: ReportMetadata,
 ): Promise<Uint8Array> {
+  // Loaded on demand: exceljs is ~1 MB and only staff export reports, so it stays out of
+  // the startup bundle and the offline precache.
+  const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'TCTESDAConnect';
   workbook.created = new Date();

@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { LoginBrandingPanel } from '@/features/auth/components/LoginBrandingPanel';
 import { LoginForm, type MfaChallengePrompt } from '@/features/auth/components/LoginForm';
+import { isNetworkOrServerOutage } from '@/features/auth/authErrors';
 import { loginFormSchema, type LoginFormValues } from '@/features/auth/loginSchema';
 import { fetchAuthenticatedProfile, refreshOfflineCachesForUser } from '@/lib/authProfile';
 import {
@@ -14,13 +15,14 @@ import {
   purgeOtherUsersCachedData,
   safeDexieWrite,
 } from '@/lib/db/dexie';
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { isSupabaseConfigured } from '@/lib/env';
 import type { HeroPresetKey } from '@/lib/landing/laptopMetrics';
 import {
+  revokeOfflineUnlockCredential,
   saveOfflineUnlockCredential,
-  seedDemoOfflineAccounts,
   verifyOfflineUnlockCredential,
 } from '@/lib/offline/offlineAuth';
+import { offlineTtlHoursForRole } from '@/lib/offline/offlinePolicy';
 import { resolveAuthorizedPostLoginRoute } from '@/lib/rbac';
 import { getSupabaseClient } from '@/lib/supabase';
 import { refreshReactiveQueueCounts } from '@/lib/sync/connectivityMonitor';
@@ -190,16 +192,10 @@ export function LoginPage() {
     }
 
     const client = getSupabaseClient();
-    const expiresAt = new Date(
-      Date.now() + env.VITE_OFFLINE_MAX_TTL_HOURS * 3600 * 1000,
-    ).toISOString();
+    const offlineTtlHours = offlineTtlHoursForRole(userProfile.role);
+    const expiresAt = new Date(Date.now() + offlineTtlHours * 3600 * 1000).toISOString();
 
-    await saveOfflineUnlockCredential(
-      userProfile.email,
-      password,
-      userProfile,
-      env.VITE_OFFLINE_MAX_TTL_HOURS,
-    );
+    await saveOfflineUnlockCredential(userProfile.email, password, userProfile, offlineTtlHours);
     await safeDexieWrite(
       () =>
         offlineDb.syncMeta.put({
@@ -265,10 +261,6 @@ export function LoginPage() {
     setMfaChallenge(null);
     setPendingWorkspace(null);
 
-    if (values.email.toLowerCase().endsWith('@tesdaconnect.test')) {
-      await seedDemoOfflineAccounts().catch(() => undefined);
-    }
-
     const attemptOfflineUnlock = async () => {
       const offlineResult = await verifyOfflineUnlockCredential(values.email, values.password);
       if (!offlineResult.ok) {
@@ -299,7 +291,7 @@ export function LoginPage() {
     }
 
     let data: { user: { id: string } | null } = { user: null };
-    let error: { message: string } | null = null;
+    let error: { message: string; status?: number } | null = null;
     try {
       const res = await client.auth.signInWithPassword({
         email: values.email.trim(),
@@ -319,10 +311,10 @@ export function LoginPage() {
       return;
     }
 
-    if (
-      error &&
-      /failed to fetch|networkerror|network request failed|fetch|timeout/i.test(error.message)
-    ) {
+    // Only a network/server outage may fall back to the offline vault. A definitive
+    // rejection from the server (wrong or changed password, banned/inactive account)
+    // must never be overridden by a previously cached credential.
+    if (error && isNetworkOrServerOutage(error)) {
       useConnectivityStore.getState().setReachability(
         typeof navigator !== 'undefined' ? navigator.onLine : false,
         false,
@@ -332,16 +324,7 @@ export function LoginPage() {
     }
 
     if (error || !data.user) {
-      const offlineResult = await verifyOfflineUnlockCredential(values.email, values.password);
-      if (offlineResult.ok) {
-        await continueAfterMfaOrProfile({
-          profile: offlineResult.profile,
-          password: values.password,
-          isOfflineSession: true,
-          offlineExpiresAt: offlineResult.expiresAt,
-        });
-        return;
-      }
+      await revokeOfflineUnlockCredential(values.email);
       setAuthError(error?.message ?? 'Invalid login credentials.');
       return;
     }
@@ -352,6 +335,7 @@ export function LoginPage() {
     );
 
     if (!userProfile) {
+      await revokeOfflineUnlockCredential(values.email);
       await client.auth.signOut().catch(() => undefined);
       setAuthError(
         inactiveReason ??

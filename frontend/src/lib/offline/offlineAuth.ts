@@ -1,4 +1,5 @@
-import { offlineDb, type OfflineVaultRecord } from '@/lib/db/dexie';
+import { LEGACY_DEMO_EMAIL_DOMAIN, offlineDb, type OfflineVaultRecord } from '@/lib/db/dexie';
+import { offlineExpiryIsoForRole } from '@/lib/offline/offlinePolicy';
 import type { UserProfile } from '@/types/auth';
 
 function toHex(bytes: Uint8Array): string {
@@ -75,11 +76,12 @@ export async function verifyOfflineUnlockCredential(
 ): Promise<{ ok: true; profile: UserProfile; expiresAt: string } | { ok: false; reason: string }> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (normalizedEmail.endsWith('@tesdaconnect.test')) {
-    await seedDemoOfflineAccounts();
+  if (normalizedEmail.endsWith(LEGACY_DEMO_EMAIL_DOMAIN)) {
+    await offlineDb.offlineVault.delete(normalizedEmail).catch(() => undefined);
+    return { ok: false, reason: 'Demo accounts are not available. Sign in with your institutional account.' };
   }
 
-  let record: OfflineVaultRecord | undefined = await offlineDb.offlineVault.get(normalizedEmail);
+  const record: OfflineVaultRecord | undefined = await offlineDb.offlineVault.get(normalizedEmail);
 
   if (!record) {
     return {
@@ -89,43 +91,57 @@ export async function verifyOfflineUnlockCredential(
   }
 
   if (new Date(record.expiresAt).getTime() <= Date.now()) {
-    if (normalizedEmail.endsWith('@tesdaconnect.test')) {
-      await seedDemoOfflineAccounts();
-      record = await offlineDb.offlineVault.get(normalizedEmail);
-    } else {
-      await offlineDb.offlineVault.delete(normalizedEmail);
-      return {
-        ok: false,
-        reason: 'Your offline unlock window has expired. Connect to the internet to re-verify your credentials.',
-      };
-    }
+    await offlineDb.offlineVault.delete(normalizedEmail);
+    return {
+      ok: false,
+      reason: 'Your offline unlock window has expired. Connect to the internet to re-verify your credentials.',
+    };
   }
 
-  if (record && record.profile.accountStatus !== 'active') {
+  if (record.profile.accountStatus !== 'active') {
     return { ok: false, reason: 'This cached account is not active.' };
-  }
-
-  if (!record) {
-    return { ok: false, reason: 'Account could not be retrieved from offline vault.' };
   }
 
   const candidateHex = await deriveDigestHex(password, fromHex(record.saltHex));
   const isDirectMatch = constantTimeEqual(candidateHex, record.passwordDigestHex);
 
-  const isDemoAccount = normalizedEmail.endsWith('@tesdaconnect.test');
-  const isAcceptedDemoPassword = isDemoAccount && (
-    password === 'Password123!' ||
-    password === 'password123' ||
-    password === `${record.profile.role}123` ||
-    (record.profile.role === 'system_administrator' && password === 'admin123') ||
-    (record.profile.role === 'focal_person' && password === 'focal123')
-  );
-
-  if (!isDirectMatch && !isAcceptedDemoPassword) {
+  if (!isDirectMatch) {
     return { ok: false, reason: 'Offline credentials do not match the previously authorized account on this device.' };
   }
 
   return { ok: true, profile: record.profile, expiresAt: record.expiresAt };
+}
+
+/**
+ * Removes the cached offline verifier for an email. Called when the server
+ * definitively rejects a sign-in (wrong/changed password, banned or inactive
+ * account) so stale credentials can no longer unlock the device offline.
+ */
+export async function revokeOfflineUnlockCredential(email: string): Promise<void> {
+  await offlineDb.offlineVault.delete(email.trim().toLowerCase()).catch(() => undefined);
+}
+
+/**
+ * Slides the offline unlock window forward after the server has re-verified the
+ * user's session (token refresh / app open while online) and stores the latest
+ * profile, so role or status changes reach the offline copy. Does nothing when the
+ * device has no offline credential for this user (it is only created at password sign-in).
+ */
+export async function extendOfflineUnlockWindow(profile: UserProfile): Promise<string | null> {
+  const record = await offlineDb.offlineVault.where('userId').equals(profile.id).first();
+  if (!record) return null;
+  const expiresAt = offlineExpiryIsoForRole(profile.role);
+  await offlineDb.offlineVault.update(record.email, {
+    profile,
+    expiresAt,
+    syncedAt: new Date().toISOString(),
+  });
+  return expiresAt;
+}
+
+/** Removes every offline credential cached for a user id (e.g. account deactivated). */
+export async function revokeOfflineUnlockCredentialsForUser(userId: string): Promise<void> {
+  await offlineDb.offlineVault.where('userId').equals(userId).delete().catch(() => undefined);
 }
 
 export const DEFAULT_IDLE_LOCK_MS = 15 * 60 * 1000;
@@ -161,163 +177,4 @@ export async function pruneExpiredVaultRecords(): Promise<number> {
   return offlineDb.offlineVault
     .filter((record) => new Date(record.expiresAt).getTime() <= nowMs)
     .delete();
-}
-
-/**
- * Pre-seeds default test/demo accounts in offline vault for local development and offline resilience.
- * Enables instant testing of System Administrator, Registrar, Focal Person, Trainer, and Scholar.
- */
-export async function seedDemoOfflineAccounts(): Promise<void> {
-  const demoAccounts: Array<{
-    email: string;
-    password: string;
-    profile: UserProfile;
-  }> = [
-    {
-      email: 'admin@tesdaconnect.test',
-      password: 'admin123',
-      profile: {
-        id: '11111111-0000-4000-8000-000000000001',
-        email: 'admin@tesdaconnect.test',
-        fullName: 'System Administrator',
-        username: 'admin',
-        role: 'system_administrator',
-        accountStatus: 'active',
-        forcePasswordChange: false,
-        passwordExpiresAt: null,
-        passwordExpiryExempt: true,
-        lastLoginAt: new Date().toISOString(),
-        institutions: [
-          {
-            institutionId: '11111111-1111-4111-8111-111111111111',
-            isPrimary: true,
-            code: 'BST',
-            name: 'Balli School of Technology',
-          },
-          {
-            institutionId: '22222222-2222-4222-8222-222222222222',
-            isPrimary: false,
-            code: 'MIF',
-            name: 'Mamburao Integrated Farm',
-          },
-        ],
-      },
-    },
-    {
-      email: 'registrar@tesdaconnect.test',
-      password: 'registrar123',
-      profile: {
-        id: '22222222-0000-4000-8000-000000000002',
-        email: 'registrar@tesdaconnect.test',
-        fullName: 'Rina Santos (Registrar)',
-        username: 'registrar',
-        role: 'registrar',
-        accountStatus: 'active',
-        forcePasswordChange: false,
-        passwordExpiresAt: null,
-        passwordExpiryExempt: true,
-        lastLoginAt: new Date().toISOString(),
-        institutions: [
-          {
-            institutionId: '11111111-1111-4111-8111-111111111111',
-            isPrimary: true,
-            code: 'BST',
-            name: 'Balli School of Technology',
-          },
-          {
-            institutionId: '22222222-2222-4222-8222-222222222222',
-            isPrimary: false,
-            code: 'MIF',
-            name: 'Mamburao Integrated Farm',
-          },
-        ],
-      },
-    },
-    {
-      email: 'focal@tesdaconnect.test',
-      password: 'focal123',
-      profile: {
-        id: '33333333-0000-4000-8000-000000000003',
-        email: 'focal@tesdaconnect.test',
-        fullName: 'Marvin Cruz (Focal Person)',
-        username: 'focal',
-        role: 'focal_person',
-        accountStatus: 'active',
-        forcePasswordChange: false,
-        passwordExpiresAt: null,
-        passwordExpiryExempt: true,
-        lastLoginAt: new Date().toISOString(),
-        institutions: [
-          {
-            institutionId: '22222222-2222-4222-8222-222222222222',
-            isPrimary: true,
-            code: 'MIF',
-            name: 'Mamburao Integrated Farm',
-          },
-        ],
-      },
-    },
-    {
-      email: 'trainer@tesdaconnect.test',
-      password: 'trainer123',
-      profile: {
-        id: '44444444-0000-4000-8000-000000000004',
-        email: 'trainer@tesdaconnect.test',
-        fullName: 'Danilo Reyes (Trainer)',
-        username: 'trainer',
-        role: 'trainer',
-        accountStatus: 'active',
-        forcePasswordChange: false,
-        passwordExpiresAt: null,
-        passwordExpiryExempt: true,
-        lastLoginAt: new Date().toISOString(),
-        institutions: [
-          {
-            institutionId: '11111111-1111-4111-8111-111111111111',
-            isPrimary: true,
-            code: 'BST',
-            name: 'Balli School of Technology',
-          },
-        ],
-      },
-    },
-    {
-      email: 'scholar@tesdaconnect.test',
-      password: 'scholar123',
-      profile: {
-        id: '55555555-0000-4000-8000-000000000005',
-        email: 'scholar@tesdaconnect.test',
-        fullName: 'Juan Dela Cruz (Scholar)',
-        username: 'scholar',
-        role: 'scholar',
-        accountStatus: 'active',
-        forcePasswordChange: false,
-        passwordExpiresAt: null,
-        passwordExpiryExempt: true,
-        lastLoginAt: new Date().toISOString(),
-        institutions: [
-          {
-            institutionId: '11111111-1111-4111-8111-111111111111',
-            isPrimary: true,
-            code: 'BST',
-            name: 'Balli School of Technology',
-          },
-        ],
-      },
-    },
-  ];
-
-  for (const acc of demoAccounts) {
-    const existing = await offlineDb.offlineVault.get(acc.email);
-    let needReseed = !existing || new Date(existing.expiresAt).getTime() <= Date.now();
-    if (existing && !needReseed) {
-      const testHex = await deriveDigestHex(acc.password, fromHex(existing.saltHex));
-      if (!constantTimeEqual(testHex, existing.passwordDigestHex)) {
-        needReseed = true;
-      }
-    }
-    if (needReseed) {
-      await saveOfflineUnlockCredential(acc.email, acc.password, acc.profile, 720);
-    }
-  }
 }

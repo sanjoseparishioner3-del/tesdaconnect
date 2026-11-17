@@ -447,6 +447,74 @@ describe('Unified TCTESDAConnect Login Experience & Role-Based Security', () => 
     );
   });
 
+  it('never unlocks a cached offline credential when the server definitively rejects the sign-in', async () => {
+    const user = userEvent.setup();
+    const cachedProfile: UserProfile = {
+      id: 'uid-revoked-scholar',
+      email: 'revoked.scholar@bst.tesda.ph',
+      fullName: 'Revoked Scholar',
+      username: 'revoked_scholar',
+      role: 'scholar',
+      accountStatus: 'active',
+      forcePasswordChange: false,
+      passwordExpiresAt: null,
+      passwordExpiryExempt: true,
+      lastLoginAt: null,
+      institutions: [{ institutionId: 'inst-bst', isPrimary: true, code: 'BST', name: 'Balli School of Technology' }],
+    };
+    await saveOfflineUnlockCredential(cachedProfile.email, 'OldPassword!1', cachedProfile, 12);
+
+    mockSignInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Invalid login credentials', status: 400 },
+    });
+
+    renderLoginRoutes();
+    await user.type(screen.getByLabelText(/Email Address/i), cachedProfile.email);
+    await user.type(screen.getByLabelText(/^Password$/i), 'OldPassword!1');
+    await user.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Invalid login credentials/i);
+    });
+    expect(screen.queryByText('Scholar Learner Portal')).not.toBeInTheDocument();
+    expect(useAuthStore.getState().profile).toBeNull();
+    expect(await offlineDb.offlineVault.get(cachedProfile.email)).toBeUndefined();
+  });
+
+  it('falls back to the cached offline credential only when the auth server is unreachable', async () => {
+    const user = userEvent.setup();
+    const cachedProfile: UserProfile = {
+      id: 'uid-field-scholar',
+      email: 'field.scholar@bst.tesda.ph',
+      fullName: 'Field Scholar',
+      username: 'field_scholar',
+      role: 'scholar',
+      accountStatus: 'active',
+      forcePasswordChange: false,
+      passwordExpiresAt: null,
+      passwordExpiryExempt: true,
+      lastLoginAt: null,
+      institutions: [{ institutionId: 'inst-bst', isPrimary: true, code: 'BST', name: 'Balli School of Technology' }],
+    };
+    await saveOfflineUnlockCredential(cachedProfile.email, 'FieldPass!1', cachedProfile, 12);
+
+    mockSignInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Service Unavailable', status: 503 },
+    });
+
+    renderLoginRoutes();
+    await user.type(screen.getByLabelText(/Email Address/i), cachedProfile.email);
+    await user.type(screen.getByLabelText(/^Password$/i), 'FieldPass!1');
+    await user.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Scholar Learner Portal')).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().isOfflineSession).toBe(true);
+  });
+
   it('supports live Supabase Forgot Password flow and blocks recovery when offline', async () => {
     const user = userEvent.setup();
     mockResetPasswordForEmail.mockResolvedValueOnce({ error: null });
@@ -496,7 +564,7 @@ describe('Unified TCTESDAConnect Login Experience & Role-Based Security', () => 
       await saveOfflineUnlockCredential('focal@mif.tesda.ph', offlineSecret, offlineFocal, 12);
 
       renderLoginRoutes();
-      expect(screen.getByText(/Offline mode detected — automatic offline workspace ready/i)).toBeInTheDocument();
+      expect(screen.getByText(/You are offline. You can still sign in/i)).toBeInTheDocument();
 
       // Unknown offline account must be rejected
       await user.type(screen.getByLabelText(/Email Address/i), 'unknown@mif.tesda.ph');

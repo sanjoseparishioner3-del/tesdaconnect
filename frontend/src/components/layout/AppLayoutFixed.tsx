@@ -40,6 +40,7 @@ import { DEFAULT_IDLE_LOCK_MS } from '@/lib/offline/offlineAuth';
 import { useDeviceLockStore } from '@/stores/deviceLockStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
 import { TesdaLogo } from '@/components/branding/TesdaLogo';
+import { LearnerBottomNav } from '@/components/layout/LearnerBottomNav';
 
 const ICONS: Record<NavItemConfig['icon'], React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -127,6 +128,17 @@ export function AppLayoutFixed() {
 
   async function handleSignOut() {
     const currentUserId = profile?.id;
+    // Signing out wipes this device's offline data, including changes not yet uploaded.
+    const unsyncedCount = pendingCount + failedCount + conflictCount;
+    if (unsyncedCount > 0) {
+      const proceed = window.confirm(
+        `You have ${unsyncedCount} change(s) or file(s) that have not been uploaded yet.\n\n` +
+          'Signing out will permanently delete them from this device. ' +
+          'Connect to the internet and wait for "Synced" first if you want to keep them.\n\n' +
+          'Sign out anyway?',
+      );
+      if (!proceed) return;
+    }
     try {
       const client = getSupabaseClient();
       if (client && isOnline) {
@@ -446,9 +458,20 @@ export function AppLayoutFixed() {
           {/* MAIN WORKSPACE - Independently scrollable */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-3 sm:p-4 lg:p-6">
-              <Outlet />
+              {/* Keeps the header, sidebar and bottom bar on screen while a page chunk loads. */}
+              <React.Suspense
+                fallback={
+                  <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status">
+                    Loading...
+                  </div>
+                }
+              >
+                <Outlet />
+              </React.Suspense>
             </div>
           </main>
+
+          {(profile?.role === 'scholar' || profile?.role === 'applicant') && <LearnerBottomNav />}
         </div>
       </div>
 

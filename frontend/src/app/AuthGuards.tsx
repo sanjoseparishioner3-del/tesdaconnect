@@ -1,7 +1,30 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { canAccessRoute, isPasswordUpdateRequired } from '@/lib/rbac';
+import { canAccessRoute, isPasswordUpdateRequired, resolveAuthorizedPostLoginRoute } from '@/lib/rbac';
 import { useAuthStore } from '@/stores/authStore';
 import type { AppRole } from '@/types/auth';
+
+/**
+ * Entry point of the installed app (manifest start_url): skips the marketing landing
+ * page and opens the signed-in user's workspace, or the login screen.
+ */
+export function LaunchRedirect() {
+  const profile = useAuthStore((s) => s.profile);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
+        Opening TESDA Connect...
+      </div>
+    );
+  }
+
+  if (!profile || profile.accountStatus !== 'active') {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={resolveAuthorizedPostLoginRoute(profile)} replace />;
+}
 
 export function ProtectedRoute() {
   const profile = useAuthStore((s) => s.profile);

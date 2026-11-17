@@ -10,14 +10,25 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'images/landing/*.jpg', 'models/*.glb'],
+      // Precache only what the app shell needs offline. The landing-page 3D model and
+      // photo gallery are fetched on demand and cached at runtime (see runtimeCaching).
+      includeAssets: [
+        'favicon.svg',
+        'favicon.ico',
+        'apple-touch-icon.png',
+        'tesda-logo.png',
+        'tesda-logo-circular.png',
+        'tesda-official-logo.png',
+        'images/tesda-logo.png',
+        'images/landing/tesda-main-plaza.jpg',
+      ],
       manifest: {
         id: '/',
         name: 'TCTESDAConnect — TESDA Training Operations',
         short_name: 'TESDA Connect',
         description:
           'Offline-capable TESDA training operations workflow support for Balli School of Technology (BST) and Mamburao Integrated Farm (MIF).',
-        start_url: '/',
+        start_url: '/app',
         scope: '/',
         display: 'standalone',
         orientation: 'any',
@@ -40,6 +51,10 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html}'],
+        // Landing-only 3D (three.js) and staff-only Excel export are large and not needed by
+        // the offline app shell; they are runtime-cached the first time they are used online.
+        globIgnores: ['**/LaptopCanvasScene-*.js', '**/exceljs*.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
@@ -49,7 +64,24 @@ export default defineConfig({
         // implicitly cached in unencrypted Workbox HTTP caches (Dexie stores scoped offline data).
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
+            // Hashed build chunks left out of the precache (immutable, so cache-first is safe).
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tesda-lazy-chunks-v1',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 60 },
+            },
+          },
+          {
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/models/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tesda-landing-models-v1',
+              expiration: { maxEntries: 5, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/images/'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'tesda-static-images-v1',
@@ -76,15 +108,20 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase-vendor': ['@supabase/supabase-js'],
-          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
-          'gsap-vendor': ['gsap'],
-          'charts-vendor': ['recharts'],
-          'calendar-vendor': ['@fullcalendar/core', '@fullcalendar/react', '@fullcalendar/daygrid', '@fullcalendar/timegrid', '@fullcalendar/interaction'],
-          'excel-vendor': ['exceljs'],
-          'pdf-vendor': ['pdf-lib'],
+        // Only split out the always-needed, rarely-changing core libraries. Heavy libraries
+        // that are lazy-loaded (three.js on the landing page, exceljs for staff exports) are left
+        // to Rollup so they stay in their own on-demand chunks instead of loading at startup.
+        // (The previous explicit vendor chunks made the 1 MB three.js and exceljs chunks
+        // load on every page, including offline on scholars' phones.)
+        manualChunks(id) {
+          if (!id.includes('/node_modules/')) return undefined;
+          // Rollup module ids always use forward slashes, including on Windows.
+          const pkg = (name: string) => id.includes(`/node_modules/${name}/`);
+          if (pkg('react') || pkg('react-dom') || pkg('react-router') || pkg('react-router-dom') || pkg('scheduler')) {
+            return 'react-vendor';
+          }
+          if (id.includes('/node_modules/@supabase/')) return 'supabase-vendor';
+          return undefined;
         },
       },
     },

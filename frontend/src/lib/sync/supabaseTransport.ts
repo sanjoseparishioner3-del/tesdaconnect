@@ -1,6 +1,6 @@
 import { refreshOfflineCachesForUser } from '@/lib/authProfile';
 import { offlineDb, safeDexieWrite } from '@/lib/db/dexie';
-import { env } from '@/lib/env';
+import { offlineExpiryIsoForRole } from '@/lib/offline/offlinePolicy';
 import { getSupabaseClient } from '@/lib/supabase';
 import {
   refreshReactiveQueueCounts,
@@ -197,6 +197,29 @@ export const supabaseSyncTransport: SyncTransportHandler = async (mutation) => {
   return mapped;
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Builds the storage object path `<institution_id>/<user_id>/<timestamp>_<name>` that the
+ * learner-documents storage RLS policies expect. Returns null when no valid institution
+ * UUID is known yet (the document then stays queued until one is available).
+ */
+export function buildLearnerDocumentStoragePath(
+  institutionId: string | null | undefined,
+  userId: string,
+  originalName: string,
+  timestampMs: number = Date.now(),
+): string | null {
+  if (!institutionId || !UUID_PATTERN.test(institutionId)) return null;
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return `${institutionId}/${userId}/${timestampMs}_${safeName}`;
+}
+
+/**
+ * Uploads learner documents that were saved on this device while offline: pushes the
+ * blob to Storage, inserts the `learner_documents` row, then swaps the local-only cache
+ * entry for one keyed by the server id so it is not listed twice.
+ */
 export async function flushQueuedOfflineDocuments(userId: string): Promise<number> {
   const client = getSupabaseClient();
   if (!client) return 0;
@@ -207,13 +230,30 @@ export async function flushQueuedOfflineDocuments(userId: string): Promise<numbe
   const queuedDocs = await offlineDb.cachedDocuments
     .where('ownerUserId')
     .equals(userId)
-    .filter((d) => d.queuedUpload === true && Boolean(d.blob) && Boolean(d.storagePath))
+    .filter((d) => d.queuedUpload === true && Boolean(d.blob))
     .toArray();
+
+  const fallbackInstitutionId = useAuthStore
+    .getState()
+    .profile?.institutions?.find((inst) => UUID_PATTERN.test(inst.institutionId))?.institutionId;
 
   let uploaded = 0;
   for (const doc of queuedDocs) {
-    if (!doc.blob || !doc.storagePath) continue;
-    const { error: upErr } = await client.storage.from('learner-documents').upload(doc.storagePath, doc.blob, {
+    if (!doc.blob) continue;
+
+    let storagePath = doc.storagePath;
+    let institutionId = doc.institutionId;
+    if (!storagePath) {
+      if (!UUID_PATTERN.test(institutionId) && fallbackInstitutionId) {
+        institutionId = fallbackInstitutionId;
+      }
+      storagePath = buildLearnerDocumentStoragePath(institutionId, doc.targetUserId, doc.originalName);
+      if (!storagePath) continue;
+      // Persist the chosen path first so a retry after a partial failure reuses it.
+      await offlineDb.cachedDocuments.update(doc.id, { storagePath, institutionId });
+    }
+
+    const { error: upErr } = await client.storage.from('learner-documents').upload(storagePath, doc.blob, {
       contentType: doc.mimeType,
       upsert: false,
     });
@@ -222,24 +262,44 @@ export async function flushQueuedOfflineDocuments(userId: string): Promise<numbe
       continue;
     }
 
-    const { error: insErr } = await client.from('learner_documents').insert({
-      user_id: doc.targetUserId,
-      institution_id: doc.institutionId,
-      document_type: doc.documentType,
-      storage_path: doc.storagePath,
-      original_name: doc.originalName,
-      mime_type: doc.mimeType,
-      size_bytes: doc.sizeBytes,
-      status: 'pending',
-    });
+    const { data: insertedRows, error: insErr } = await client
+      .from('learner_documents')
+      .insert({
+        user_id: doc.targetUserId,
+        document_type: doc.documentType,
+        storage_path: storagePath,
+        original_name: doc.originalName,
+        mime_type: doc.mimeType,
+        size_bytes: doc.sizeBytes,
+      })
+      .select('id')
+      .returns<Array<{ id: string }>>();
 
-    if (!insErr) {
-      await offlineDb.cachedDocuments.update(doc.id, {
-        queuedUpload: false,
-        syncedAt: new Date().toISOString(),
+    if (insErr) continue;
+
+    const serverId = insertedRows?.[0]?.id;
+    const syncedAt = new Date().toISOString();
+    if (serverId && serverId !== doc.id) {
+      await offlineDb.transaction('rw', offlineDb.cachedDocuments, async () => {
+        await offlineDb.cachedDocuments.delete(doc.id);
+        await offlineDb.cachedDocuments.put({
+          ...doc,
+          id: serverId,
+          institutionId,
+          storagePath,
+          queuedUpload: false,
+          syncedAt,
+        });
       });
-      uploaded += 1;
+    } else {
+      await offlineDb.cachedDocuments.update(doc.id, {
+        storagePath,
+        institutionId,
+        queuedUpload: false,
+        syncedAt,
+      });
     }
+    uploaded += 1;
   }
 
   await refreshReactiveQueueCounts(userId);
@@ -336,9 +396,7 @@ export async function triggerForegroundSync(
             userId,
             lastSyncedAt: refreshedAt,
             offlineEnabledForUser: true,
-            offlineExpiresAt: new Date(
-              Date.now() + env.VITE_OFFLINE_MAX_TTL_HOURS * 3600 * 1000,
-            ).toISOString(),
+            offlineExpiresAt: offlineExpiryIsoForRole(activeRole),
             deviceId: 'browser-client',
           }),
         );

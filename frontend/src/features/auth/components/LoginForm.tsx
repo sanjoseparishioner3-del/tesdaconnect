@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { AuthStatusMessage } from '@/features/auth/components/AuthStatusMessage';
 import { PasswordInput } from '@/features/auth/components/PasswordInput';
 import type { LoginFormValues } from '@/features/auth/loginSchema';
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ROLE_LABELS, type UserProfile } from '@/types/auth';
 
@@ -193,7 +193,7 @@ export function LoginForm({
         <AuthStatusMessage
           variant="offline"
           className="mb-4"
-          message={`Offline mode detected — automatic offline workspace ready for previously verified accounts within the ${env.VITE_OFFLINE_MAX_TTL_HOURS}-hour security window.`}
+          message="You are offline. You can still sign in if you have signed in on this device before while connected."
         />
       )}
 
