@@ -15,7 +15,7 @@ AS $$
 DECLARE
   v_role public.app_role;
 BEGIN
-  IF auth.role() = 'service_role' OR current_user = 'postgres' THEN
+  IF auth.role() = 'service_role' OR session_user IN ('postgres', 'supabase_admin') THEN
     RETURN NEW;
   END IF;
 
