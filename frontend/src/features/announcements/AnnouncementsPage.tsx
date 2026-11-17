@@ -19,7 +19,9 @@ import {
 import { offlineDb } from '@/lib/db/dexie';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
-import { enqueueMutation, generateStableId } from '@/lib/sync/syncEngine';
+import { isNetworkOrServerOutage } from '@/features/auth/authErrors';
+import { enqueueAnnouncementForPublish, listPendingAnnouncementPublishes } from '@/lib/announcements/offlinePublish';
+import { generateStableId } from '@/lib/sync/syncEngine';
 import { formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
@@ -92,18 +94,21 @@ export function AnnouncementsPage() {
     [],
   );
 
-  const localDrafts = useLiveQuery(
-    () =>
-      userId
-        ? offlineDb.localDrafts
-            .where('userId')
-            .equals(userId)
-            .filter((d) => d.draftType === 'announcement')
-            .toArray()
-        : [],
+  // Announcements written offline wait in the sync outbox and publish automatically on reconnect.
+  const pendingAnnouncements = useLiveQuery(
+    () => (userId ? listPendingAnnouncementPublishes(userId) : []),
     [userId],
     [],
   );
+
+  // When the queue drains (published on reconnect), refresh the live bulletin list.
+  const previousPendingCount = React.useRef(0);
+  React.useEffect(() => {
+    if (pendingAnnouncements.length < previousPendingCount.current) {
+      void queryClient.invalidateQueries({ queryKey: ['live-announcements'] });
+    }
+    previousPendingCount.current = pendingAnnouncements.length;
+  }, [pendingAnnouncements.length, queryClient]);
 
   function toggleTargetGroup(groupId: SelectableTargetGroup) {
     setSelectedGroups((prev) =>
@@ -175,43 +180,37 @@ export function AnnouncementsPage() {
           attachment_size: attachmentFile?.size ?? null,
         });
         if (insertErr) {
-          toast.error(insertErr.message);
-          return;
+          // Connection dropped mid-publish: queue it like an offline announcement instead of
+          // losing it (attachments cannot be queued, so those still need a retry online).
+          if (!attachmentPath && isNetworkOrServerOutage(insertErr)) {
+            await enqueueAnnouncementForPublish({
+              userId,
+              draftId,
+              payload: {
+                institution_id: instId,
+                title: title.trim(),
+                body: body.trim(),
+                audience: legacyAudience,
+                target_roles: targetRoles,
+                announcement_type: announcementType,
+                event_date: eventDate || null,
+                event_time: eventTime.trim() || null,
+              },
+            });
+            toast.success('Connection lost: announcement queued and will publish automatically when back online.');
+          } else {
+            toast.error(insertErr.message);
+            return;
+          }
+        } else {
+          toast.success('Published announcement cleanly.');
         }
-        toast.success('Published announcement cleanly.');
         await queryClient.invalidateQueries({ queryKey: ['live-announcements'] });
       } else {
-        await offlineDb.localDrafts.put({
-          clientDraftId: draftId,
+        await enqueueAnnouncementForPublish({
           userId,
-          draftType: 'announcement',
-          title: title.trim(),
-          institutionId: instId,
+          draftId,
           payload: {
-            title: title.trim(),
-            body: body.trim(),
-            audience: legacyAudience,
-            target_roles: targetRoles,
-            announcement_type: announcementType,
-            event_date: eventDate || null,
-            event_time: eventTime.trim() || null,
-            // Hard requirement: offline-created announcements remain local drafts until synced online
-            is_draft: true,
-            published_at: null,
-          },
-          baseVersion: null,
-          status: 'editing',
-          updatedAt: nowIso,
-          createdAt: nowIso,
-        });
-
-        await enqueueMutation({
-          userId,
-          entityType: 'announcement_draft',
-          entityId: draftId,
-          operation: 'upsert',
-          payload: {
-            client_draft_id: draftId,
             institution_id: instId,
             title: title.trim(),
             body: body.trim(),
@@ -220,12 +219,9 @@ export function AnnouncementsPage() {
             announcement_type: announcementType,
             event_date: eventDate || null,
             event_time: eventTime.trim() || null,
-            is_draft: true,
           },
-          baseVersion: null,
         });
-
-        toast.success('Saved locally as an UNSENT DRAFT. It will sync to Supabase when online.');
+        toast.success('Offline: announcement queued. It will be published automatically once you are back online.');
       }
 
       setTitle('');
@@ -421,23 +417,33 @@ export function AnnouncementsPage() {
 
               <Button type="submit" variant="secondary" disabled={saving}>
                 <Send className="h-4 w-4" />
-                {isOnline ? 'Publish Announcement' : 'Save Local Draft (Not Yet Delivered)'}
+                {isOnline ? 'Publish Announcement' : 'Queue — Publish When Online'}
               </Button>
             </form>
           </CardContent>
         </Card>
       )}
 
-      {localDrafts.length > 0 && (
+      {pendingAnnouncements.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-amber-900">Local Unsynced Drafts ({localDrafts.length})</CardTitle>
+            <CardTitle className="text-sm text-amber-900">
+              Waiting to publish ({pendingAnnouncements.length})
+            </CardTitle>
+            <CardDescription className="text-xs text-amber-800">
+              Written while offline. These are sent and published automatically as soon as this device is back online.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
-            {localDrafts.map((d) => (
-              <div key={d.clientDraftId} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white p-3">
-                <span className="font-medium text-slate-900">{d.title}</span>
-                <Badge variant="warning">Draft Only — Not Delivered</Badge>
+            {pendingAnnouncements.map((d) => (
+              <div key={d.mutationId} className="rounded-lg border border-amber-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-medium text-slate-900">{d.title}</span>
+                  <Badge variant={d.state === 'failed' ? 'destructive' : 'warning'}>
+                    {d.state === 'failed' ? 'Not sent — will retry' : d.state === 'conflict' ? 'Needs review' : 'Pending'}
+                  </Badge>
+                </div>
+                {d.lastError && d.state !== 'pending' && <p className="mt-1 text-[11px] text-red-700">{d.lastError}</p>}
               </div>
             ))}
           </CardContent>
