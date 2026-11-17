@@ -45,6 +45,8 @@ interface PendingAuthCompletion {
   offlineExpiresAt?: string;
 }
 
+const SIGN_IN_WATCHDOG_MS = 45_000;
+
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -256,7 +258,28 @@ export function LoginPage() {
     await finalizeSessionAndRedirect(completion, defaultInstId);
   }
 
+  // Safety net: individual requests already time out, but the whole sign-in must never
+  // leave the button spinning on "Verifying account & role..." indefinitely.
   async function handleSubmit(values: LoginFormValues) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watchdog = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), SIGN_IN_WATCHDOG_MS);
+    });
+    try {
+      const outcome = await Promise.race([runSignIn(values).then(() => 'done' as const), watchdog]);
+      if (outcome === 'timeout' && !useAuthStore.getState().profile) {
+        setAuthError(
+          'Signing in is taking too long. Check your internet connection and try again. If you have signed in on this device before, turn on airplane mode and sign in again to use offline mode.',
+        );
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function runSignIn(values: LoginFormValues) {
     setAuthError(null);
     setMfaChallenge(null);
     setPendingWorkspace(null);
@@ -329,10 +352,31 @@ export function LoginPage() {
       return;
     }
 
-    const { profile: userProfile, inactiveReason } = await fetchAuthenticatedProfile(
+    const { profile: userProfile, inactiveReason, networkError } = await fetchAuthenticatedProfile(
       client,
       data.user.id,
     );
+
+    if (!userProfile && networkError) {
+      // The server accepted the password but the connection stalled while loading the
+      // account. Open the offline workspace if this device has one; otherwise ask to retry.
+      useConnectivityStore.getState().setReachability(
+        typeof navigator !== 'undefined' ? navigator.onLine : false,
+        false,
+      );
+      const offlineResult = await verifyOfflineUnlockCredential(values.email, values.password);
+      if (offlineResult.ok) {
+        await continueAfterMfaOrProfile({
+          profile: offlineResult.profile,
+          password: values.password,
+          isOfflineSession: true,
+          offlineExpiresAt: offlineResult.expiresAt,
+        });
+        return;
+      }
+      setAuthError(inactiveReason ?? 'The connection is too slow. Please try again.');
+      return;
+    }
 
     if (!userProfile) {
       await revokeOfflineUnlockCredential(values.email);

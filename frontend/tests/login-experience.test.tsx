@@ -515,6 +515,41 @@ describe('Unified TCTESDAConnect Login Experience & Role-Based Security', () => 
     expect(useAuthStore.getState().isOfflineSession).toBe(true);
   });
 
+  it('keeps offline access and opens the cached workspace when the connection stalls after sign-in', async () => {
+    const user = userEvent.setup();
+    const cachedProfile: UserProfile = {
+      id: 'uid-slow-scholar',
+      email: 'slow.scholar@bst.tesda.ph',
+      fullName: 'Slow Network Scholar',
+      username: 'slow_scholar',
+      role: 'scholar',
+      accountStatus: 'active',
+      forcePasswordChange: false,
+      passwordExpiresAt: null,
+      passwordExpiryExempt: true,
+      lastLoginAt: null,
+      institutions: [{ institutionId: 'inst-bst', isPrimary: true, code: 'BST', name: 'Balli School of Technology' }],
+    };
+    await saveOfflineUnlockCredential(cachedProfile.email, 'SlowPass!2026', cachedProfile, 168);
+
+    mockSignInWithPassword.mockResolvedValueOnce({ data: { user: { id: cachedProfile.id } }, error: null });
+    mockProfileMaybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'TimeoutError: Request timed out (slow or lost connection).' },
+    });
+
+    renderLoginRoutes();
+    await user.type(screen.getByLabelText(/Email Address/i), cachedProfile.email);
+    await user.type(screen.getByLabelText(/^Password$/i), 'SlowPass!2026');
+    await user.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Scholar Learner Portal')).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().isOfflineSession).toBe(true);
+    expect(await offlineDb.offlineVault.get(cachedProfile.email)).toBeDefined();
+  });
+
   it('supports live Supabase Forgot Password flow and blocks recovery when offline', async () => {
     const user = userEvent.setup();
     mockResetPasswordForEmail.mockResolvedValueOnce({ error: null });

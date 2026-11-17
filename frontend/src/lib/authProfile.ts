@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isNetworkOrServerOutage } from '@/features/auth/authErrors';
 import {
   offlineDb,
   safeDexieWrite,
@@ -34,7 +35,7 @@ interface DbInstitutionJoinRow {
 export async function fetchAuthenticatedProfile(
   client: SupabaseClient,
   userId: string,
-): Promise<{ profile: UserProfile | null; inactiveReason?: string }> {
+): Promise<{ profile: UserProfile | null; inactiveReason?: string; networkError?: boolean }> {
   const { data: profileData, error: profileErr } = await client
     .from('profiles')
     .select(
@@ -45,6 +46,14 @@ export async function fetchAuthenticatedProfile(
     .maybeSingle();
 
   const row = profileData ?? null;
+  if (profileErr && isNetworkOrServerOutage(profileErr)) {
+    // Slow or lost connection: not a verdict on the account, so callers must not revoke access.
+    return {
+      profile: null,
+      networkError: true,
+      inactiveReason: 'The connection is too slow or was lost while loading your account. Please try again.',
+    };
+  }
   if (profileErr || !row) {
     return { profile: null, inactiveReason: 'Institutional profile record could not be loaded.' };
   }
@@ -57,11 +66,19 @@ export async function fetchAuthenticatedProfile(
     };
   }
 
-  const { data: membershipData } = await client
+  const { data: membershipData, error: membershipErr } = await client
     .from('institution_user')
     .select('institution_id, is_primary, institutions(id, code, name)')
     .eq('user_id', userId)
     .returns<DbInstitutionJoinRow[]>();
+
+  if (membershipErr && isNetworkOrServerOutage(membershipErr)) {
+    return {
+      profile: null,
+      networkError: true,
+      inactiveReason: 'The connection is too slow or was lost while loading your account. Please try again.',
+    };
+  }
 
   const institutions: InstitutionAssignment[] = (membershipData ?? []).map((m) => {
     const inst = Array.isArray(m.institutions) ? m.institutions[0] : m.institutions;

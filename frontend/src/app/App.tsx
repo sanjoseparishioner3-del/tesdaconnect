@@ -166,8 +166,13 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
       }
 
       try {
-        const { profile } = await fetchAuthenticatedProfile(client, userId);
+        const { profile, networkError } = await fetchAuthenticatedProfile(client, userId);
         if (!isMounted) return;
+        if (!profile && networkError) {
+          // Connection stalled: keep the user in their cached offline workspace instead of
+          // treating it as a deactivated account.
+          throw new Error('Profile request timed out.');
+        }
         if (profile) {
           await purgeOtherUsersCachedData(profile.id).catch(() => undefined);
           setProfile(profile, { isOfflineSession: false });
