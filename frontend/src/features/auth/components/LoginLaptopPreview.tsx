@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import type { LaptopScrollState } from '@/components/landing/LaptopCanvasScene';
 import { LightweightLaptopMockup } from '@/components/landing/LightweightLaptopMockup';
+import { LazyLaptopCanvasScene } from '@/components/landing/lazyLaptopScene';
 import { detectLandingCapabilities, type HeroPresetKey } from '@/lib/landing/laptopMetrics';
 
-const LazyLaptopCanvasScene = React.lazy(() => import('@/components/landing/LaptopCanvasScene'));
 
 const FLOATING_INDICATORS = [
   {

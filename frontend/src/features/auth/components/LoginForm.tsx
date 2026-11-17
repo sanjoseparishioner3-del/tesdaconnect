@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { AuthStatusMessage } from '@/features/auth/components/AuthStatusMessage';
 import { PasswordInput } from '@/features/auth/components/PasswordInput';
 import type { LoginFormValues } from '@/features/auth/loginSchema';
+import { OfflineReadyBadge } from '@/components/pwa/OfflineReadyBadge';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ROLE_LABELS, type UserProfile } from '@/types/auth';
@@ -375,6 +376,7 @@ export function LoginForm({
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#047857]" aria-hidden="true" />
                 <span>
                   Offline access prepares automatically per signed-in role; lock screen or sign out on shared PCs.
+                  <OfflineReadyBadge className="ml-1 align-middle" />
                 </span>
               </p>
 

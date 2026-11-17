@@ -10,6 +10,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Send cookies with the manifest request so install works on password-protected
+      // deployments (e.g. Vercel Deployment Protection on preview URLs).
+      useCredentials: true,
       // Precache only what the app shell needs offline. The landing-page 3D model and
       // photo gallery are fetched on demand and cached at runtime (see runtimeCaching).
       includeAssets: [

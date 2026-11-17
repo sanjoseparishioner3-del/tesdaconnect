@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { ExpandedDashboardPreview } from '@/components/landing/ExpandedDashboardPreview';
 import type { LaptopScrollState } from '@/components/landing/LaptopCanvasScene';
 import { LightweightLaptopMockup } from '@/components/landing/LightweightLaptopMockup';
+import { LazyLaptopCanvasScene } from '@/components/landing/lazyLaptopScene';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,7 +41,6 @@ function ensureScrollTriggerRegistered(): boolean {
   return true;
 }
 
-const LazyLaptopCanvasScene = React.lazy(() => import('@/components/landing/LaptopCanvasScene'));
 
 const MODULE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   intake: FileText,

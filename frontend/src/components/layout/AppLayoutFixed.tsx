@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
+import { OfflineReadyBadge } from '@/components/pwa/OfflineReadyBadge';
 import { purgeOfflineUserData } from '@/lib/db/dexie';
 import { FLAT_SIDEBAR_ITEMS, type NavItemConfig, type NavSection } from '@/lib/rbac';
 import { ROLE_LABELS } from '@/types/auth';
@@ -400,6 +401,7 @@ export function AppLayoutFixed() {
 
             <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               <InstallAppButton className="hidden md:inline-flex" />
+              <OfflineReadyBadge compact />
               {isOfflineSession && <Badge variant="warning" className="text-[10px]">Offline</Badge>}
               <Badge
                 variant={

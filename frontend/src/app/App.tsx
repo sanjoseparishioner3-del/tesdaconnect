@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { LaunchRedirect, ProtectedRoute, RoleRoute } from '@/app/AuthGuards';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { STAFF_DASHBOARD_ROLES } from '@/lib/rbac';
 import { AppLayoutFixed } from '@/components/layout/AppLayoutFixed';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -14,6 +15,7 @@ import {
   revokeOfflineUnlockCredentialsForUser,
 } from '@/lib/offline/offlineAuth';
 import { offlineExpiryIsoForRole } from '@/lib/offline/offlinePolicy';
+import { requestPersistentStorage } from '@/lib/pwa/offlineReadiness';
 import { PwaInstallBanner } from '@/components/pwa/PwaInstallBanner';
 import { getSupabaseClient, readPersistedSessionUserId } from '@/lib/supabase';
 import { installOfflineQueueObservers, refreshReactiveQueueCounts, verifyServerReachability } from '@/lib/sync/connectivityMonitor';
@@ -170,6 +172,8 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
           await purgeOtherUsersCachedData(profile.id).catch(() => undefined);
           setProfile(profile, { isOfflineSession: false });
           useAuthStore.getState().setOfflineOptIn(true);
+          // Keep the offline copy (app, records, queued uploads) from being evicted on low storage.
+          void requestPersistentStorage();
           // Server just re-verified this session: slide the offline unlock window forward.
           const vaultExpiresAt = await extendOfflineUnlockWindow(profile).catch(() => null);
           await offlineDb.syncMeta.put({
@@ -301,6 +305,7 @@ export function App() {
       <BrowserRouter>
         <ConnectivityAndSessionEffects>
           <PwaInstallBanner />
+          <AppErrorBoundary>
           <React.Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
@@ -365,6 +370,7 @@ export function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </React.Suspense>
+          </AppErrorBoundary>
         </ConnectivityAndSessionEffects>
         <Toaster richColors position="top-right" />
       </BrowserRouter>
