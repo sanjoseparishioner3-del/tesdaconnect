@@ -405,34 +405,14 @@ export function LoginForm({
               )}
             </Button>
 
-            {/* Quick Demo Accounts Selection */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs">
-              <div className="flex items-center justify-between pb-1.5 font-semibold text-slate-700">
-                <span>Mga Demo Account (I-click para mag-fill):</span>
+            {/* Secure Institutional Access & Offline Guidance */}
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 text-xs text-slate-600">
+              <div className="flex items-center gap-2 font-semibold text-emerald-950">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span>Opisyal na Institutional Authentication</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { role: 'Admin', email: 'admin@tesdaconnect.test', pwd: 'admin123' },
-                  { role: 'Registrar', email: 'registrar@tesdaconnect.test', pwd: 'registrar123' },
-                  { role: 'Focal', email: 'focal@tesdaconnect.test', pwd: 'focal123' },
-                  { role: 'Trainer', email: 'trainer@tesdaconnect.test', pwd: 'trainer123' },
-                  { role: 'Scholar', email: 'scholar@tesdaconnect.test', pwd: 'scholar123' },
-                ].map((demo) => (
-                  <button
-                    key={demo.role}
-                    type="button"
-                    onClick={() => {
-                      form.setValue('email', demo.email, { shouldValidate: true });
-                      form.setValue('password', demo.pwd, { shouldValidate: true });
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition hover:border-emerald-500 hover:text-emerald-700 active:scale-95"
-                  >
-                    <span className="font-bold">{demo.role}:</span> {demo.pwd}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 text-[10.5px] text-slate-500">
-                Tip: Pwede ring gamitin ang universal demo password na <code className="rounded bg-slate-200 px-1 py-0.5 font-mono text-[10px] font-semibold text-slate-800">Password123!</code> para sa lahat ng demo account.
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                Gamitin ang inyong opisyal na email at password na nakatalaga sa database. Kapag nakapag-sign in na nang kahit isang beses sa device na ito, awtomatikong magagamit ang inyong workspace kahit walang internet o data connection.
               </p>
             </div>
           </form>

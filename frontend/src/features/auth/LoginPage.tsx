@@ -72,11 +72,6 @@ export function LoginPage() {
     },
   });
 
-  // Pre-seed demo accounts on login page mount for instant 1-click testing
-  React.useEffect(() => {
-    void seedDemoOfflineAccounts().catch(() => undefined);
-  }, []);
-
   // Smooth GSAP Laptop-to-Login Morph entrance when arriving from landing or loading /login
   React.useEffect(() => {
     const root = rootRef.current;

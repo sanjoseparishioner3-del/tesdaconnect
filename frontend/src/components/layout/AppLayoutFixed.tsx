@@ -28,6 +28,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { purgeOfflineUserData } from '@/lib/db/dexie';
 import { FLAT_SIDEBAR_ITEMS, type NavItemConfig, type NavSection } from '@/lib/rbac';
 import { ROLE_LABELS } from '@/types/auth';
@@ -286,6 +287,11 @@ export function AppLayoutFixed() {
           </div>
         )}
 
+        {/* Install App Shortcut */}
+        {!sidebarCollapsed && (
+          <InstallAppButton className="w-full justify-center border-emerald-600/40 bg-emerald-800/40 text-emerald-100 hover:bg-emerald-800/70 hover:text-white" />
+        )}
+
         {/* Sign Out Button */}
         <Button
           type="button"
@@ -381,6 +387,7 @@ export function AppLayoutFixed() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+              <InstallAppButton className="hidden md:inline-flex" />
               {isOfflineSession && <Badge variant="warning" className="text-[10px]">Offline</Badge>}
               <Badge
                 variant={

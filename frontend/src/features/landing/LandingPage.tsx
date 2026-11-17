@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LaptopMorphShowcase } from '@/components/landing/LaptopMorphShowcase';
+import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { HeroPresetKey } from '@/lib/landing/laptopMetrics';
@@ -125,7 +126,8 @@ export function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <InstallAppButton />
             <Button
               asChild
               className="h-9 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700 focus-visible:ring-emerald-600 sm:h-10 sm:px-4 sm:text-sm"

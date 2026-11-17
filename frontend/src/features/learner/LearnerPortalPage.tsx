@@ -37,6 +37,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
+import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { RegistrationIntakeWorkspace } from '@/features/intake/RegistrationIntakeWorkspace';
 import { DigitalSystemIdCard } from '@/features/learner/DigitalSystemIdCard';
 import { offlineDb } from '@/lib/db/dexie';
@@ -754,6 +755,8 @@ export function LearnerPortalPage() {
               <FileText className="mr-1.5 h-3.5 w-3.5" />
               Edit MIS 03-01
             </Button>
+
+            <InstallAppButton className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" />
           </div>
         </div>
 

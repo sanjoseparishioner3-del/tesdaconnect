@@ -23,7 +23,8 @@ import { TrainingSchedulesPage } from '@/features/schedules/TrainingSchedulesPag
 import { OfflineSyncPage } from '@/features/sync/OfflineSyncPage';
 import { fetchAuthenticatedProfile, refreshOfflineCachesForUser } from '@/lib/authProfile';
 import { offlineDb, pruneExpiredOfflineData, purgeOtherUsersCachedData } from '@/lib/db/dexie';
-import { getUnexpiredOfflineProfileByUserId, seedDemoOfflineAccounts } from '@/lib/offline/offlineAuth';
+import { getUnexpiredOfflineProfileByUserId } from '@/lib/offline/offlineAuth';
+import { PwaInstallBanner } from '@/components/pwa/PwaInstallBanner';
 import { getSupabaseClient } from '@/lib/supabase';
 import { installOfflineQueueObservers, refreshReactiveQueueCounts, verifyServerReachability } from '@/lib/sync/connectivityMonitor';
 import { triggerForegroundSync } from '@/lib/sync/supabaseTransport';
@@ -54,7 +55,6 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
 
     const cleanupObservers = installOfflineQueueObservers(() => useAuthStore.getState().profile?.id);
     void pruneExpiredOfflineData().catch(() => undefined);
-    void seedDemoOfflineAccounts().catch(() => undefined);
     void sanitizeLegacySyncOutbox()
       .then(async (count) => {
         if (count > 0) {
@@ -237,6 +237,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ConnectivityAndSessionEffects>
+          <PwaInstallBanner />
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
