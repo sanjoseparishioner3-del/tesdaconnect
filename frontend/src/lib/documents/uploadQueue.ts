@@ -63,6 +63,8 @@ export class UploadHttpError extends Error {
 export interface DocumentUploadTransport {
   getAccessToken(): Promise<string | null>;
   uploadObject(params: {
+    /** Storage bucket; defaults to learner-documents. */
+    bucket?: string;
     path: string;
     blob: Blob;
     mime: string;
@@ -81,7 +83,7 @@ export interface DocumentUploadTransport {
   }): Promise<string>;
 }
 
-function xhrUpload(params: Parameters<DocumentUploadTransport['uploadObject']>[0]): Promise<void> {
+export function xhrUpload(params: Parameters<DocumentUploadTransport['uploadObject']>[0]): Promise<void> {
   const base = (env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
   const encodedPath = params.path.split('/').map(encodeURIComponent).join('/');
   return new Promise((resolve, reject) => {
@@ -97,7 +99,7 @@ function xhrUpload(params: Parameters<DocumentUploadTransport['uploadObject']>[0
     };
     const onAbort = () => xhr.abort();
 
-    xhr.open('POST', `${base}/storage/v1/object/${BUCKET}/${encodedPath}`);
+    xhr.open('POST', `${base}/storage/v1/object/${params.bucket ?? BUCKET}/${encodedPath}`);
     xhr.setRequestHeader('Authorization', `Bearer ${params.accessToken}`);
     xhr.setRequestHeader('apikey', env.VITE_SUPABASE_ANON_KEY ?? '');
     xhr.setRequestHeader('x-upsert', 'false');

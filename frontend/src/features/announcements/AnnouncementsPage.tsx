@@ -18,7 +18,9 @@ import {
 } from '@/lib/announcements/audienceRules';
 import { offlineDb } from '@/lib/db/dexie';
 import { isSupabaseConfigured } from '@/lib/env';
+import { processStaffUploadQueue, saveStaffUpload } from '@/lib/documents/staffUploadQueue';
 import { getSupabaseClient } from '@/lib/supabase';
+import { refreshReactiveQueueCounts } from '@/lib/sync/connectivityMonitor';
 import { isNetworkOrServerOutage } from '@/features/auth/authErrors';
 import { enqueueAnnouncementForPublish, listPendingAnnouncementPublishes } from '@/lib/announcements/offlinePublish';
 import { generateStableId } from '@/lib/sync/syncEngine';
@@ -145,22 +147,53 @@ export function AnnouncementsPage() {
       const instId = profile?.institutions?.[0]?.institutionId ?? null;
       const client = getSupabaseClient();
 
-      if (isOnline && client && isSupabaseConfigured) {
-        let attachmentPath: string | null = null;
-        if (attachmentFile) {
-          const safeName = attachmentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const prefix = instId ?? 'global';
-          attachmentPath = `${prefix}/${userId}/${Date.now()}_${safeName}`;
-          const { error: uploadErr } = await client.storage.from('announcement-attachments').upload(attachmentPath, attachmentFile, {
-            contentType: attachmentFile.type || 'application/octet-stream',
-            upsert: false,
+      if (attachmentFile) {
+        // Announcements with a file go through the local-first upload queue: the file is saved on
+        // this device, uploaded in the background (or when back online) and the announcement is
+        // published only after the file is in Storage.
+        const prefix = instId ?? 'global';
+        await saveStaffUpload({
+          userId,
+          kind: 'announcement',
+          label: title.trim(),
+          bucket: 'announcement-attachments',
+          buildPath: (id, name) => `${prefix}/${userId}/${id}_${name}`,
+          file: attachmentFile,
+          table: 'announcements',
+          lookup: { column: 'client_draft_id', value: draftId },
+          buildRow: ({ storagePath, name, mime, size }) => ({
+            client_draft_id: draftId,
+            institution_id: instId,
+            author_user_id: userId,
+            title: title.trim(),
+            body: body.trim(),
+            audience: legacyAudience,
+            target_roles: targetRoles,
+            announcement_type: announcementType,
+            event_date: eventDate || null,
+            event_time: eventTime.trim() || null,
+            is_draft: false,
+            published_at: '$now',
+            attachment_path: storagePath,
+            attachment_name: name,
+            attachment_mime: mime,
+            attachment_size: size,
+          }),
+        });
+        await refreshReactiveQueueCounts(userId);
+        if (isOnline) {
+          toast.success('Saved. Publishing with the attachment in the background…');
+          void processStaffUploadQueue(userId).then(async (sent) => {
+            if (sent > 0) {
+              toast.success('Announcement published with its attachment.');
+              await queryClient.invalidateQueries({ queryKey: ['live-announcements'] });
+            }
+            await refreshReactiveQueueCounts(userId);
           });
-          if (uploadErr) {
-            toast.error(uploadErr.message);
-            return;
-          }
+        } else {
+          toast.success('Saved on this device. It will be published with its attachment when you are back online.');
         }
-
+      } else if (isOnline && client && isSupabaseConfigured) {
         const { error: insertErr } = await client.from('announcements').insert({
           client_draft_id: draftId,
           institution_id: instId,
@@ -174,15 +207,10 @@ export function AnnouncementsPage() {
           event_time: eventTime.trim() || null,
           is_draft: false,
           published_at: nowIso,
-          attachment_path: attachmentPath,
-          attachment_name: attachmentFile?.name ?? null,
-          attachment_mime: attachmentFile?.type || null,
-          attachment_size: attachmentFile?.size ?? null,
         });
         if (insertErr) {
-          // Connection dropped mid-publish: queue it like an offline announcement instead of
-          // losing it (attachments cannot be queued, so those still need a retry online).
-          if (!attachmentPath && isNetworkOrServerOutage(insertErr)) {
+          // Connection dropped mid-publish: queue it like an offline announcement instead of losing it.
+          if (isNetworkOrServerOutage(insertErr)) {
             await enqueueAnnouncementForPublish({
               userId,
               draftId,
@@ -406,14 +434,12 @@ export function AnnouncementsPage() {
                 />
               </div>
 
-              {isOnline && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="ann_attachment" className="flex items-center gap-1.5">
-                    <Paperclip className="h-3.5 w-3.5" /> Optional Attachment (&lt;= 10 MB)
-                  </Label>
-                  <Input id="ann_attachment" type="file" onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)} />
-                </div>
-              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="ann_attachment" className="flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5" /> Optional Attachment (&lt;= 10 MB)
+                </Label>
+                <Input id="ann_attachment" type="file" onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)} />
+              </div>
 
               <Button type="submit" variant="secondary" disabled={saving}>
                 <Send className="h-4 w-4" />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, BookOpen, Download, FileUp, Plus } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { Archive, BookOpen, CheckCircle2, Download, FileUp, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,8 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
+import { offlineDb } from '@/lib/db/dexie';
+import { processStaffUploadQueue, saveStaffUpload } from '@/lib/documents/staffUploadQueue';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
+import { refreshReactiveQueueCounts } from '@/lib/sync/connectivityMonitor';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
 
@@ -131,6 +135,89 @@ export function CoursesAndMaterialsPage() {
     },
   });
 
+  // Keep the lists on the device so the page opens offline (scholars and staff).
+  const userId = profile?.id;
+  React.useEffect(() => {
+    if (!userId || !coursesQuery.data) return;
+    const syncedAt = new Date().toISOString();
+    void offlineDb.cachedCourses
+      .bulkPut(
+        coursesQuery.data.map((c) => ({
+          id: c.id,
+          userId,
+          institutionId: c.institution_id,
+          code: c.code,
+          name: c.name,
+          qualificationLevel: c.qualification_level,
+          trainingHours: c.training_hours,
+          isActive: c.is_active,
+          archivedAt: c.archived_at,
+          syncedAt,
+        })),
+      )
+      .catch(() => undefined);
+  }, [userId, coursesQuery.data]);
+  React.useEffect(() => {
+    if (!userId || !materialsQuery.data) return;
+    const syncedAt = new Date().toISOString();
+    void offlineDb.cachedMaterials
+      .bulkPut(
+        materialsQuery.data.map((m) => ({
+          id: m.id,
+          userId,
+          courseId: m.course_id,
+          title: m.title,
+          description: m.description,
+          originalName: m.original_name,
+          storagePath: m.storage_path,
+          sizeBytes: m.size_bytes,
+          isPublished: m.is_published,
+          createdAt: m.created_at,
+          syncedAt,
+        })),
+      )
+      .catch(() => undefined);
+  }, [userId, materialsQuery.data]);
+
+  const cachedCourses = useLiveQuery(() => (userId ? offlineDb.cachedCourses.where('userId').equals(userId).toArray() : []), [userId], []);
+  const cachedMaterials = useLiveQuery(() => (userId ? offlineDb.cachedMaterials.where('userId').equals(userId).toArray() : []), [userId], []);
+  const savedFiles = useLiveQuery(() => (userId ? offlineDb.cachedMaterialFiles.where('userId').equals(userId).toArray() : []), [userId], []);
+  const savedFileIds = new Set(savedFiles.map((f) => f.id));
+
+  const courses: CourseRow[] =
+    isOnline && coursesQuery.data
+      ? coursesQuery.data
+      : cachedCourses
+          .filter((c) => showArchivedCourses || !c.archivedAt)
+          .map((c) => ({
+            id: c.id,
+            institution_id: c.institutionId,
+            code: c.code,
+            name: c.name,
+            qualification_level: c.qualificationLevel,
+            training_hours: c.trainingHours,
+            is_active: c.isActive,
+            archived_at: c.archivedAt,
+          }))
+          .sort((a, b) => a.code.localeCompare(b.code));
+  const materials: MaterialRow[] =
+    isOnline && materialsQuery.data
+      ? materialsQuery.data
+      : cachedMaterials
+          .filter((m) => !selectedCourseId || m.courseId === selectedCourseId)
+          .map((m) => ({
+            id: m.id,
+            course_id: m.courseId,
+            title: m.title,
+            description: m.description,
+            original_name: m.originalName,
+            storage_path: m.storagePath,
+            size_bytes: m.sizeBytes,
+            is_published: m.isPublished,
+            created_at: m.createdAt,
+          }))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
   const createCourseMutation = useMutation({
     mutationFn: async () => {
       const client = getSupabaseClient();
@@ -183,44 +270,94 @@ export function CoursesAndMaterialsPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      const client = getSupabaseClient();
-      if (!client || !profile) throw new Error('Authenticated Supabase session required.');
-      const course = (coursesQuery.data ?? []).find((c) => c.id === selectedCourseId) ?? coursesQuery.data?.[0];
+      if (!profile) throw new Error('Sign in is required.');
+      const course = courses.find((c) => c.id === selectedCourseId) ?? courses[0];
       if (!course) throw new Error('Select a course first before uploading materials.');
       if (!selectedFile) throw new Error('Choose a PDF, DOCX, PPTX, or instructional file (<= 20 MB).');
-      if (selectedFile.size > MAX_MATERIAL_BYTES) {
-        throw new Error('File exceeds the 20 MB maximum size enforced by PostgreSQL and Storage.');
+      const file = selectedFile;
+      // Local-first: saved on this device immediately (works offline), uploaded in the background.
+      await saveStaffUpload({
+        userId: profile.id,
+        kind: 'course_material',
+        label: materialTitle.trim() || file.name,
+        bucket: 'course-materials',
+        buildPath: (id, name) => `${course.institution_id}/${course.id}/${id}_${name}`,
+        file,
+        maxBytes: MAX_MATERIAL_BYTES,
+        table: 'course_materials',
+        buildRow: ({ storagePath, name, mime, size }) => ({
+          course_id: course.id,
+          uploaded_by_user_id: profile.id,
+          title: materialTitle.trim() || name,
+          original_name: name,
+          storage_path: storagePath,
+          mime_type: mime,
+          size_bytes: size,
+          is_published: true,
+        }),
+      });
+      await refreshReactiveQueueCounts(profile.id);
+      if (isOnline) {
+        void processStaffUploadQueue(profile.id).then(async (sent) => {
+          if (sent > 0) {
+            toast.success('Course material uploaded.');
+            await queryClient.invalidateQueries({ queryKey: ['course-materials'] });
+          }
+          await refreshReactiveQueueCounts(profile.id);
+        });
       }
-
-      const safeFilename = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `${course.institution_id}/${course.id}/${Date.now()}_${safeFilename}`;
-
-      const { error: uploadErr } = await client.storage.from('course-materials').upload(storagePath, selectedFile, {
-        contentType: selectedFile.type || 'application/octet-stream',
-        upsert: false,
-      });
-      if (uploadErr) throw new Error(uploadErr.message);
-
-      const { error: insertErr } = await client.from('course_materials').insert({
-        course_id: course.id,
-        uploaded_by_user_id: profile.id,
-        title: materialTitle.trim() || selectedFile.name,
-        original_name: selectedFile.name,
-        storage_path: storagePath,
-        mime_type: selectedFile.type || 'application/octet-stream',
-        size_bytes: selectedFile.size,
-        is_published: true,
-      });
-      if (insertErr) throw new Error(insertErr.message);
     },
-    onSuccess: async () => {
-      toast.success('Course material uploaded securely to private Storage bucket.');
+    onSuccess: () => {
+      toast.success(
+        isOnline ? 'Saved. Uploading in the background…' : 'Saved on this device. It will be uploaded when you are back online.',
+      );
       setMaterialTitle('');
       setSelectedFile(null);
-      await queryClient.invalidateQueries({ queryKey: ['course-materials'] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  async function handleSaveOffline(material: MaterialRow) {
+    const client = getSupabaseClient();
+    if (!client || !userId) return;
+    try {
+      const { data, error } = await client.storage.from('course-materials').download(material.storage_path);
+      if (error || !data) throw new Error(error?.message ?? 'Unable to download the file.');
+      await offlineDb.cachedMaterialFiles.put({
+        id: material.id,
+        userId,
+        blob: data,
+        mimeType: data.type || 'application/octet-stream',
+        originalName: material.original_name,
+        sizeBytes: data.size,
+        savedAt: new Date().toISOString(),
+      });
+      toast.success('Saved for offline use.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to save the file for offline use.');
+    }
+  }
+
+  async function handleOpenOffline(material: MaterialRow) {
+    const file = await offlineDb.cachedMaterialFiles.get(material.id);
+    if (!file) {
+      toast.error('This file is not saved on this device yet.');
+      return;
+    }
+    const url = URL.createObjectURL(file.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.download = file.originalName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  async function handleRemoveOffline(material: MaterialRow) {
+    await offlineDb.cachedMaterialFiles.delete(material.id);
+    toast.success('Removed from this device.');
+  }
 
   async function handleDownload(material: MaterialRow) {
     const client = getSupabaseClient();
@@ -234,7 +371,7 @@ export function CoursesAndMaterialsPage() {
   }
 
   const normalizedFilter = courseFilter.trim().toLowerCase();
-  const filteredCourses = (coursesQuery.data ?? []).filter(
+  const filteredCourses = courses.filter(
     (c) => !normalizedFilter || c.code.toLowerCase().includes(normalizedFilter) || c.name.toLowerCase().includes(normalizedFilter),
   );
   const coursesPagination = usePagination({
@@ -243,7 +380,7 @@ export function CoursesAndMaterialsPage() {
   });
   const pagedCourses = filteredCourses.slice(coursesPagination.startIndex, coursesPagination.endIndex);
 
-  const filteredMaterials = (materialsQuery.data ?? []).filter(
+  const filteredMaterials = materials.filter(
     (m) =>
       !normalizedFilter ||
       m.title.toLowerCase().includes(normalizedFilter) ||
@@ -381,10 +518,10 @@ export function CoursesAndMaterialsPage() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={uploadMutation.isPending || !isOnline}
+                  disabled={uploadMutation.isPending}
                   onClick={() => uploadMutation.mutate()}
                 >
-                  {uploadMutation.isPending ? 'Uploading...' : 'Upload Material'}
+                  {uploadMutation.isPending ? 'Saving...' : isOnline ? 'Upload Material' : 'Save for upload'}
                 </Button>
               </div>
             </div>
@@ -454,9 +591,35 @@ export function CoursesAndMaterialsPage() {
                         {m.original_name} • {(m.size_bytes / 1024).toFixed(1)} KB
                       </p>
                     </div>
-                    <Button type="button" size="sm" variant="outline" onClick={() => handleDownload(m)}>
-                      <Download className="h-3.5 w-3.5" /> Signed Download
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {savedFileIds.has(m.id) ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Available offline
+                          </span>
+                          <Button type="button" size="sm" variant="outline" onClick={() => void handleOpenOffline(m)}>
+                            <Download className="h-3.5 w-3.5" /> Open
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => void handleRemoveOffline(m)} aria-label="Remove from this device">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {isOnline && (
+                            <Button type="button" size="sm" variant="outline" onClick={() => void handleDownload(m)}>
+                              <Download className="h-3.5 w-3.5" /> Download
+                            </Button>
+                          )}
+                          {isOnline && (
+                            <Button type="button" size="sm" variant="secondary" onClick={() => void handleSaveOffline(m)}>
+                              Save for offline use
+                            </Button>
+                          )}
+                          {!isOnline && <span className="text-[11px] text-slate-500">Not saved offline</span>}
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

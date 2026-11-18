@@ -213,10 +213,91 @@ export class TesdaConnectOfflineDb extends Dexie {
       cachedTraineeDirectory: 'id, userId, institutionId, applicationStatus, updatedAt',
       cachedFocalData: 'id, userId, institutionId, batchId, kind, syncedAt',
     });
+    this.version(4).stores({
+      queuedUploads: 'id, userId, kind, state, nextAttemptAt, createdAt',
+      cachedCourses: 'id, userId, institutionId',
+      cachedMaterials: 'id, userId, courseId',
+      cachedMaterialFiles: 'id, userId',
+    });
   }
+
+  /** Staff file uploads (operational documents, announcement attachments, learner files added by staff) waiting to be sent. */
+  queuedUploads!: import('dexie').Table<QueuedUploadRecord, string>;
+  /** Course catalog and learning-material lists, cached so they open offline. */
+  cachedCourses!: import('dexie').Table<CachedCourseRecord, string>;
+  cachedMaterials!: import('dexie').Table<CachedMaterialRecord, string>;
+  /** Learning-material files the user saved for offline use. */
+  cachedMaterialFiles!: import('dexie').Table<CachedMaterialFileRecord, string>;
 
   cachedTraineeDirectory!: import('dexie').Table<CachedTraineeDirectoryRecord, string>;
   cachedFocalData!: import('dexie').Table<CachedFocalDataRecord, string>;
+}
+
+export type QueuedUploadKind = 'operational_document' | 'announcement' | 'learner_document_staff' | 'course_material';
+export type QueuedUploadState = 'pending' | 'uploading' | 'failed' | 'auth_required' | 'saved_offline';
+
+/**
+ * A file plus the database row that describes it, saved on the device first and sent when the
+ * server is reachable. `row` values equal to the string '$now' are replaced by the time of the
+ * actual insert. `lookup` makes the insert idempotent: when a row with that column value already
+ * exists the insert is skipped (interrupted or repeated uploads never duplicate).
+ */
+export interface QueuedUploadRecord {
+  id: string;
+  userId: string;
+  kind: QueuedUploadKind;
+  label: string;
+  bucket: string;
+  storagePath: string;
+  blob: Blob;
+  mimeType: string;
+  originalName: string;
+  sizeBytes: number;
+  table: string;
+  row: Record<string, unknown>;
+  lookup: { column: string; value: string };
+  state: QueuedUploadState;
+  error: string | null;
+  retryCount: number;
+  nextAttemptAt: string;
+  createdAt: string;
+}
+
+export interface CachedCourseRecord {
+  id: string;
+  userId: string;
+  institutionId: string;
+  code: string;
+  name: string;
+  qualificationLevel: string | null;
+  trainingHours: number | null;
+  isActive: boolean;
+  archivedAt: string | null;
+  syncedAt: string;
+}
+
+export interface CachedMaterialRecord {
+  id: string;
+  userId: string;
+  courseId: string;
+  title: string;
+  description: string | null;
+  originalName: string;
+  storagePath: string;
+  sizeBytes: number;
+  isPublished: boolean;
+  createdAt: string;
+  syncedAt: string;
+}
+
+export interface CachedMaterialFileRecord {
+  id: string;
+  userId: string;
+  blob: Blob;
+  mimeType: string;
+  originalName: string;
+  sizeBytes: number;
+  savedAt: string;
 }
 
 export interface CachedTraineeDirectoryRecord {
@@ -280,6 +361,10 @@ export async function purgeOfflineUserData(
       db.cachedCompetencyCharts,
       db.cachedTraineeDirectory,
       db.cachedFocalData,
+      db.queuedUploads,
+      db.cachedCourses,
+      db.cachedMaterials,
+      db.cachedMaterialFiles,
     ],
     async () => {
       if (!userId) {
@@ -297,6 +382,10 @@ export async function purgeOfflineUserData(
           db.cachedCompetencyCharts.clear(),
           db.cachedTraineeDirectory.clear(),
           db.cachedFocalData.clear(),
+          db.queuedUploads.clear(),
+          db.cachedCourses.clear(),
+          db.cachedMaterials.clear(),
+          db.cachedMaterialFiles.clear(),
         ]);
         return;
       }
@@ -315,6 +404,10 @@ export async function purgeOfflineUserData(
         db.cachedCompetencyCharts.where('userId').equals(userId).delete(),
         db.cachedTraineeDirectory.where('userId').equals(userId).delete(),
         db.cachedFocalData.where('userId').equals(userId).delete(),
+        db.queuedUploads.where('userId').equals(userId).delete(),
+        db.cachedCourses.where('userId').equals(userId).delete(),
+        db.cachedMaterials.where('userId').equals(userId).delete(),
+        db.cachedMaterialFiles.where('userId').equals(userId).delete(),
       ]);
     },
   );

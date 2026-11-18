@@ -21,6 +21,7 @@ import { offlineDb, purgeOfflineUserData, type SyncConflictRecord } from '@/lib/
 import { refreshReactiveQueueCounts, verifyServerReachability } from '@/lib/sync/connectivityMonitor';
 import { triggerForegroundSync } from '@/lib/sync/supabaseTransport';
 import { DeviceStatusCard } from '@/components/sync/DeviceStatusCard';
+import { QueuedUploadsCard } from '@/components/sync/QueuedUploadsCard';
 import { resolveConflictManually, sanitizeLegacySyncOutbox } from '@/lib/sync/syncEngine';
 import { formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -234,6 +235,7 @@ export function OfflineSyncPage() {
       )}
 
       {userId && <DeviceStatusCard userId={userId} />}
+      {userId && <QueuedUploadsCard userId={userId} />}
 
       {storageWarning && (
         <Card className="border-amber-300 bg-amber-50">

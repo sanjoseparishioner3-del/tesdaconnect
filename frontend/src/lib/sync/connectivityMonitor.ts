@@ -84,13 +84,14 @@ export async function refreshReactiveQueueCounts(userId?: string): Promise<{
   }
 
   try {
-    const [outboxRows, queuedDocs, conflictCount] = await Promise.all([
+    const [outboxRows, queuedDocs, staffUploads, conflictCount] = await Promise.all([
       offlineDb.syncOutbox.where('userId').equals(userId).toArray(),
       offlineDb.cachedDocuments
         .where('ownerUserId')
         .equals(userId)
         .filter((doc) => doc.queuedUpload === true)
         .toArray(),
+      offlineDb.queuedUploads.where('userId').equals(userId).toArray(),
       offlineDb.conflicts
         .where('userId')
         .equals(userId)
@@ -104,8 +105,10 @@ export async function refreshReactiveQueueCounts(userId?: string): Promise<{
     // Documents kept on the device: failed ones need attention, the rest are waiting to send.
     const failedDocCount = queuedDocs.filter((doc) => doc.uploadState === 'failed').length;
     const queuedDocCount = queuedDocs.length - failedDocCount;
-    const failedCount = outboxRows.filter((row) => row.status === 'failed').length + failedDocCount;
-    const pendingCount = pendingOutbox + queuedDocCount;
+    const failedStaffUploads = staffUploads.filter((u) => u.state === 'failed').length;
+    const failedCount =
+      outboxRows.filter((row) => row.status === 'failed').length + failedDocCount + failedStaffUploads;
+    const pendingCount = pendingOutbox + queuedDocCount + (staffUploads.length - failedStaffUploads);
 
     useConnectivityStore.getState().setQueueCounts({
       pendingCount,
@@ -156,6 +159,9 @@ export function installOfflineQueueObservers(getUserId: () => string | undefined
   offlineDb.cachedDocuments.hook('creating', onCreate);
   offlineDb.cachedDocuments.hook('updating', onUpdate);
   offlineDb.cachedDocuments.hook('deleting', onDelete);
+  offlineDb.queuedUploads.hook('creating', onCreate);
+  offlineDb.queuedUploads.hook('updating', onUpdate);
+  offlineDb.queuedUploads.hook('deleting', onDelete);
 
   return () => {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -168,5 +174,8 @@ export function installOfflineQueueObservers(getUserId: () => string | undefined
     offlineDb.cachedDocuments.hook('creating').unsubscribe(onCreate);
     offlineDb.cachedDocuments.hook('updating').unsubscribe(onUpdate);
     offlineDb.cachedDocuments.hook('deleting').unsubscribe(onDelete);
+    offlineDb.queuedUploads.hook('creating').unsubscribe(onCreate);
+    offlineDb.queuedUploads.hook('updating').unsubscribe(onUpdate);
+    offlineDb.queuedUploads.hook('deleting').unsubscribe(onDelete);
   };
 }

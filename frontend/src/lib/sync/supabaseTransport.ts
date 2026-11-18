@@ -1,5 +1,6 @@
 import { refreshOfflineCachesForUser } from '@/lib/authProfile';
 import { offlineDb, safeDexieWrite } from '@/lib/db/dexie';
+import { processStaffUploadQueue } from '@/lib/documents/staffUploadQueue';
 import { processDocumentUploadQueue } from '@/lib/documents/uploadQueue';
 import { offlineExpiryIsoForRole } from '@/lib/offline/offlinePolicy';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -225,8 +226,10 @@ export async function flushQueuedOfflineDocuments(userId: string): Promise<numbe
     .getState()
     .profile?.institutions?.find((inst) => UUID_PATTERN.test(inst.institutionId))?.institutionId;
   const uploaded = await processDocumentUploadQueue(userId, { fallbackInstitutionId });
+  // Files added by staff (operational documents, announcement attachments, learner files).
+  const staffUploaded = await processStaffUploadQueue(userId);
   await refreshReactiveQueueCounts(userId);
-  return uploaded;
+  return uploaded + staffUploaded;
 }
 
 export async function triggerForegroundSync(

@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { isSupabaseConfigured } from '@/lib/env';
+import { processStaffUploadQueue, saveStaffUpload } from '@/lib/documents/staffUploadQueue';
 import { getSupabaseClient } from '@/lib/supabase';
+import { refreshReactiveQueueCounts } from '@/lib/sync/connectivityMonitor';
 import { formatShortDateTime, sanitizeCsvCell } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
@@ -66,7 +68,6 @@ const VERIFIED_TEMPLATES: Array<{
   { key: 'meeting-minutes-template', title: 'Meeting Minutes Template', desc: 'Blank institutional meeting minutes worksheet.' },
 ];
 
-const MAX_OPERATIONAL_BYTES = 10 * 1024 * 1024;
 
 export function OperationalDocsAndFormsPage() {
   const profile = useAuthStore((s) => s.profile);
@@ -147,37 +148,49 @@ export function OperationalDocsAndFormsPage() {
 
   const uploadDocMutation = useMutation({
     mutationFn: async () => {
-      const client = getSupabaseClient();
-      if (!client || !profile || !activeInstId) throw new Error('Institutional session is required.');
+      if (!profile || !activeInstId) throw new Error('Institutional session is required.');
       if (!docFile) throw new Error('Select a file (<= 10 MB) first.');
-      if (docFile.size > MAX_OPERATIONAL_BYTES) {
-        throw new Error('Operational file exceeds the 10 MB limit enforced by PostgreSQL.');
+      const file = docFile;
+      // Local-first: the file is saved on this device right away (works offline) and then
+      // uploaded in the background. The queue also sends it later if there is no signal now.
+      await saveStaffUpload({
+        userId: profile.id,
+        kind: 'operational_document',
+        label: docTitle.trim() || file.name,
+        bucket: 'operational-documents',
+        buildPath: (id, name) => `${activeInstId}/${profile.id}/${id}_${name}`,
+        file,
+        table: 'operational_documents',
+        buildRow: ({ storagePath, name, mime, size }) => ({
+          institution_id: activeInstId,
+          uploaded_by_user_id: profile.id,
+          category: docCategory,
+          title: docTitle.trim() || name,
+          original_name: name,
+          storage_path: storagePath,
+          mime_type: mime,
+          size_bytes: size,
+        }),
+      });
+      await refreshReactiveQueueCounts(profile.id);
+      if (isOnline) {
+        void processStaffUploadQueue(profile.id).then(async (sent) => {
+          if (sent > 0) {
+            toast.success('Operational document uploaded.');
+            await queryClient.invalidateQueries({ queryKey: ['operational-documents'] });
+          }
+          await refreshReactiveQueueCounts(profile.id);
+        });
       }
-      const safeName = docFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `${activeInstId}/${profile.id}/${Date.now()}_${safeName}`;
-      const { error: uploadErr } = await client.storage.from('operational-documents').upload(storagePath, docFile, {
-        contentType: docFile.type || 'application/octet-stream',
-        upsert: false,
-      });
-      if (uploadErr) throw new Error(uploadErr.message);
-
-      const { error: insertErr } = await client.from('operational_documents').insert({
-        institution_id: activeInstId,
-        uploaded_by_user_id: profile.id,
-        category: docCategory,
-        title: docTitle.trim() || docFile.name,
-        original_name: docFile.name,
-        storage_path: storagePath,
-        mime_type: docFile.type || 'application/octet-stream',
-        size_bytes: docFile.size,
-      });
-      if (insertErr) throw new Error(insertErr.message);
     },
-    onSuccess: async () => {
-      toast.success('Operational document uploaded cleanly to private bucket.');
+    onSuccess: () => {
+      toast.success(
+        isOnline
+          ? 'Saved. Uploading in the background…'
+          : 'Saved on this device. It will be uploaded when you are back online.',
+      );
       setDocTitle('');
       setDocFile(null);
-      await queryClient.invalidateQueries({ queryKey: ['operational-documents'] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -432,8 +445,8 @@ export function OperationalDocsAndFormsPage() {
                   <Input id="op_doc_file" type="file" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <div className="flex items-end">
-                  <Button type="button" size="sm" disabled={uploadDocMutation.isPending || !isOnline} onClick={() => uploadDocMutation.mutate()}>
-                    <FileUp className="h-4 w-4" /> {uploadDocMutation.isPending ? 'Uploading...' : 'Upload'}
+                  <Button type="button" size="sm" disabled={uploadDocMutation.isPending} onClick={() => uploadDocMutation.mutate()}>
+                    <FileUp className="h-4 w-4" /> {uploadDocMutation.isPending ? 'Saving...' : isOnline ? 'Upload' : 'Save for upload'}
                   </Button>
                 </div>
               </div>

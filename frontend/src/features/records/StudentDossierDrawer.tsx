@@ -32,7 +32,9 @@ import {
 } from '@/lib/forms/mis0301Schema';
 import { offlineDb, safeDexieWrite } from '@/lib/db/dexie';
 import { isSupabaseConfigured } from '@/lib/env';
+import { processStaffUploadQueue, saveStaffUpload } from '@/lib/documents/staffUploadQueue';
 import { getSupabaseClient } from '@/lib/supabase';
+import { refreshReactiveQueueCounts } from '@/lib/sync/connectivityMonitor';
 import { enqueueMutation } from '@/lib/sync/syncEngine';
 import { asText, formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -333,42 +335,48 @@ export function StudentDossierDrawer({ record, canEdit, onClose, onUpdated }: St
   });
 
   async function handleStaffUploadDoc(docKey: string, file: File) {
-    const client = getSupabaseClient();
-    if (!client || !profile) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File exceeds the 10 MB limit.');
+    if (!profile) return;
+    try {
+      // Local-first: saved on this device immediately, uploaded in the background, and sent
+      // later automatically when there is no signal now. The file counts as reviewed because a
+      // registrar or administrator added it.
+      await saveStaffUpload({
+        userId: profile.id,
+        kind: 'learner_document_staff',
+        label: `${file.name} (${getDocumentLabel(docKey)})`,
+        bucket: 'learner-documents',
+        buildPath: (id, name) => `${record.institution_id}/${record.learner_user_id}/${id}_${name}`,
+        file,
+        table: 'learner_documents',
+        buildRow: ({ storagePath, name, mime, size }) => ({
+          user_id: record.learner_user_id,
+          document_type: docKey,
+          original_name: name,
+          storage_path: storagePath,
+          mime_type: mime,
+          size_bytes: size,
+          status: 'approved',
+          reviewed_by_user_id: profile.id,
+          reviewed_at: '$now',
+        }),
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save the file.');
       return;
     }
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `${record.institution_id}/${record.learner_user_id}/${Date.now()}_${safeName}`;
-    const { error: upErr } = await client.storage.from('learner-documents').upload(storagePath, file, {
-      contentType: file.type || 'application/octet-stream',
-      upsert: false,
+    await refreshReactiveQueueCounts(profile.id);
+    if (!isOnline) {
+      toast.success(`Saved "${file.name}" on this device. It will be uploaded when you are back online.`);
+      return;
+    }
+    toast.success(`Saved "${file.name}". Uploading in the background…`);
+    void processStaffUploadQueue(profile.id).then(async (sent) => {
+      if (sent > 0) {
+        toast.success(`Uploaded and approved "${file.name}".`);
+        await queryClient.invalidateQueries({ queryKey: ['student-dossier-docs', record.learner_user_id] });
+      }
+      await refreshReactiveQueueCounts(profile.id);
     });
-    if (upErr) {
-      toast.error(upErr.message);
-      return;
-    }
-
-    const { error: dbErr } = await client.from('learner_documents').insert({
-      user_id: record.learner_user_id,
-      document_type: docKey,
-      original_name: file.name,
-      storage_path: storagePath,
-      mime_type: file.type || 'application/octet-stream',
-      size_bytes: file.size,
-      status: 'verified',
-      reviewed_by_user_id: profile.id,
-      reviewed_at: new Date().toISOString(),
-    });
-    if (dbErr) {
-      toast.error(dbErr.message);
-      return;
-    }
-
-    toast.success(`Uploaded and verified "${file.name}".`);
-    await queryClient.invalidateQueries({ queryKey: ['student-dossier-docs', record.learner_user_id] });
   }
 
   async function handlePreviewOrDownloadDoc(doc: DbDocRow, action: 'preview' | 'download') {
