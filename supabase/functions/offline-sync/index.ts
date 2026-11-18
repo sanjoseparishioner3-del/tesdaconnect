@@ -31,8 +31,11 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    // New API keys: set APP_PUBLISHABLE_KEY (sb_publishable_...) and APP_SECRET_KEY (sb_secret_...)
+    // as Edge Function secrets. They take priority so the functions keep working after the
+    // legacy anon / service_role keys are disabled. The legacy variables remain a fallback.
+    const anonKey = Deno.env.get('APP_PUBLISHABLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get('APP_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
