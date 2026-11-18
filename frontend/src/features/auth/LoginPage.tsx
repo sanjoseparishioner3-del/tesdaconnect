@@ -12,7 +12,6 @@ import { fetchAuthenticatedProfile, refreshOfflineCachesForUser } from '@/lib/au
 import {
   offlineDb,
   pruneExpiredOfflineData,
-  purgeOtherUsersCachedData,
   safeDexieWrite,
 } from '@/lib/db/dexie';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -164,9 +163,6 @@ export function LoginPage() {
 
     setOfflineOptIn(true);
     await pruneExpiredOfflineData().catch(() => undefined);
-    const { otherUserPendingCount } = await purgeOtherUsersCachedData(userProfile.id).catch(
-      () => ({ otherUserPendingCount: 0 }),
-    );
 
     if (isOfflineSession) {
       await safeDexieWrite(() =>
@@ -185,9 +181,6 @@ export function LoginPage() {
         activeInstitutionId: selectedInstitutionId,
       });
       await refreshReactiveQueueCounts(userProfile.id);
-      if (otherUserPendingCount > 0) {
-        toast.info('Previous account cached records cleared; any other user pending queue stays isolated.');
-      }
       toast.success(`Unlocked offline workspace for ${userProfile.fullName}`);
       void navigate(resolveAuthorizedPostLoginRoute(userProfile, routeState?.from));
       return;

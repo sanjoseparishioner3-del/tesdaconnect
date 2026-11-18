@@ -30,7 +30,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { SyncStatusIndicator } from '@/components/sync/SyncStatusIndicator';
-import { purgeOfflineUserData } from '@/lib/db/dexie';
 import { FLAT_SIDEBAR_ITEMS, type NavItemConfig, type NavSection } from '@/lib/rbac';
 import { ROLE_LABELS } from '@/types/auth';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -82,7 +81,6 @@ export function AppLayoutFixed() {
     isOnline,
     syncStatus,
     pendingCount,
-    failedCount,
     conflictCount,
     lastSyncedAt,
     storageWarning,
@@ -127,30 +125,16 @@ export function AppLayoutFixed() {
   }, [visibleItems]);
 
   async function handleSignOut() {
-    const currentUserId = profile?.id;
-    // Signing out wipes this device's offline data, including changes not yet uploaded.
-    const unsyncedCount = pendingCount + failedCount + conflictCount;
-    if (unsyncedCount > 0) {
-      const proceed = window.confirm(
-        `You have ${unsyncedCount} change(s) or file(s) that have not been uploaded yet.\n\n` +
-          'Signing out will permanently delete them from this device. ' +
-          'Connect to the internet and wait for "Synced" first if you want to keep them.\n\n' +
-          'Sign out anyway?',
-      );
-      if (!proceed) return;
-    }
     try {
       const client = getSupabaseClient();
       if (client && isOnline) {
         await client.auth.signOut();
       }
-      await purgeOfflineUserData(undefined, currentUserId);
-      clearAuth();
-      toast.success('Signed out and cleared device offline PII cache.');
-      void navigate('/login');
     } catch {
-      await purgeOfflineUserData(undefined, currentUserId);
+      // Offline or session expired: still clear active session while preserving offline vault & caches.
+    } finally {
       clearAuth();
+      toast.success('Signed out. Your offline workspace remains ready on this device.');
       void navigate('/login');
     }
   }

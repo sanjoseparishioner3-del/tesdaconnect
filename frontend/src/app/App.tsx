@@ -8,7 +8,7 @@ import { STAFF_DASHBOARD_ROLES } from '@/lib/rbac';
 import { AppLayoutFixed } from '@/components/layout/AppLayoutFixed';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { fetchAuthenticatedProfile, refreshOfflineCachesForUser } from '@/lib/authProfile';
-import { offlineDb, pruneExpiredOfflineData, purgeOtherUsersCachedData } from '@/lib/db/dexie';
+import { offlineDb, pruneExpiredOfflineData } from '@/lib/db/dexie';
 import {
   extendOfflineUnlockWindow,
   getUnexpiredOfflineProfileByUserId,
@@ -174,7 +174,6 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
           throw new Error('Profile request timed out.');
         }
         if (profile) {
-          await purgeOtherUsersCachedData(profile.id).catch(() => undefined);
           setProfile(profile, { isOfflineSession: false });
           useAuthStore.getState().setOfflineOptIn(true);
           // Keep the offline copy (app, records, queued uploads) from being evicted on low storage.

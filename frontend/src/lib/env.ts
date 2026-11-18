@@ -26,14 +26,23 @@ const parsedEnv = parsed.success
       VITE_LEARNER_OFFLINE_TTL_HOURS: 168,
     };
 
+const LIVE_PROJECT_URL = 'https://wmgunjznvvvrtjusyvbo.supabase.co';
+const LIVE_PUBLISHABLE_KEY = 'sb_publishable_uS4KoDvos7HIY8lgvtLvAg_gF9ks4VA';
+
+const safeAnonFallback =
+  parsedEnv.VITE_SUPABASE_URL === LIVE_PROJECT_URL && parsedEnv.VITE_SUPABASE_ANON_KEY?.startsWith('eyJ')
+    ? LIVE_PUBLISHABLE_KEY
+    : parsedEnv.VITE_SUPABASE_ANON_KEY || '';
+
 /**
  * The browser API key. The new publishable key (sb_publishable_...) is preferred; the legacy
- * VITE_SUPABASE_ANON_KEY remains a fallback. Both are public by design (data is protected
- * by row level security), never put a secret / service_role key in any VITE_ variable.
+ * VITE_SUPABASE_ANON_KEY remains a fallback unless it holds a retired legacy JWT (`eyJ...`) for
+ * the live project. Both are public by design (data is protected by row level security), never put
+ * a secret / service_role key in any VITE_ variable.
  */
 export const env = {
   ...parsedEnv,
-  VITE_SUPABASE_ANON_KEY: parsedEnv.VITE_SUPABASE_PUBLISHABLE_KEY || parsedEnv.VITE_SUPABASE_ANON_KEY || '',
+  VITE_SUPABASE_ANON_KEY: parsedEnv.VITE_SUPABASE_PUBLISHABLE_KEY || safeAnonFallback,
 };
 
 export const isSupabaseConfigured = Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY);
