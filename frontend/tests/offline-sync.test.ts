@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { purgeOfflineUserData, TesdaConnectOfflineDb } from '@/lib/db/dexie';
 import {
   diffRecordFields,
+  generateStableId,
   enqueueMutation,
   resolveConflictManually,
   runOutboxSync,
@@ -14,6 +15,15 @@ describe('Dexie Offline Sync Engine & Conflict Resolution', () => {
   beforeEach(async () => {
     db = new TesdaConnectOfflineDb(`test-db-${Math.random().toString(36).slice(2)}`);
     await db.open();
+  });
+
+  it('creates valid draft UUIDs without browser randomUUID support', () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      expect(generateStableId()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('computes deterministic field diffs ignoring metadata timestamps/versions', () => {
@@ -82,7 +92,7 @@ describe('Dexie Offline Sync Engine & Conflict Resolution', () => {
     expect(await db.cachedAnnouncements.count()).toBe(0);
   });
 
-  it('sanitizes legacy stuck trainee_intake mutations with non-UUID institution_id or validation rejection', async () => {
+  it('preserves legacy intake data and requeues institution errors for repair', async () => {
     // Bad mutation 1: legacy hardcoded 'BST'
     await enqueueMutation(
       {
@@ -130,11 +140,12 @@ describe('Dexie Offline Sync Engine & Conflict Resolution', () => {
     expect(await db.syncOutbox.count()).toBe(3);
 
     const cleanedCount = await sanitizeLegacySyncOutbox(db);
-    expect(cleanedCount).toBe(2);
+    expect(cleanedCount).toBe(1);
 
     const remaining = await db.syncOutbox.toArray();
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]?.entityId).toBe('draft-valid');
-    expect(remaining[0]?.payload.institution_id).toBe(validUuid);
+    expect(remaining).toHaveLength(3);
+    expect(remaining.find((row) => row.entityId === 'draft-bad-1')?.payload.institution_id).toBe('BST');
+    expect(remaining.find((row) => row.entityId === 'draft-bad-2')?.status).toBe('pending');
+    expect(remaining.find((row) => row.entityId === 'draft-valid')?.payload.institution_id).toBe(validUuid);
   });
 });

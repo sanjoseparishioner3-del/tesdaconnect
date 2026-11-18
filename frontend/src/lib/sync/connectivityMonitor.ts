@@ -47,7 +47,7 @@ export async function verifyServerReachability(options?: {
       });
 
       const reachable = response.status < 500;
-      useConnectivityStore.getState().setReachability(browserOnline, reachable);
+      useConnectivityStore.getState().setReachability(browserOnline || (!respectOffline && reachable), reachable);
       return reachable;
     } catch {
       useConnectivityStore.getState().setReachability(browserOnline, false);

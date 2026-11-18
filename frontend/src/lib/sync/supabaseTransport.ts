@@ -253,21 +253,14 @@ export async function triggerForegroundSync(
       return { synced: 0, conflicts: 0, failed: 0 };
     }
 
-    const isOfflineSession = useAuthStore.getState().isOfflineSession;
-    if (isOfflineSession) {
-      await refreshReactiveQueueCounts(userId);
-      store.setSyncStatus('idle');
-      return { synced: 0, conflicts: 0, failed: 0 };
-    }
-
-    const reachable = await verifyServerReachability();
+    const reachable = await verifyServerReachability({ respectBrowserOffline: !options?.forceRetryFailed });
     if (!reachable) {
       await refreshReactiveQueueCounts(userId);
       return { synced: 0, conflicts: 0, failed: 0 };
     }
 
     const { data: sessionRes } = await client.auth.getSession();
-    if (!sessionRes.session?.access_token) {
+    if (!sessionRes.session?.access_token || sessionRes.session.user.id !== userId) {
       const counts = await refreshReactiveQueueCounts(userId);
       if (counts.pendingCount > 0 || counts.failedCount > 0) {
         store.setSyncStatus(
@@ -280,13 +273,16 @@ export async function triggerForegroundSync(
       return { synced: 0, conflicts: 0, failed: 0 };
     }
 
+    // A cached unlock may reconnect to an existing cloud session for this same account.
+    useAuthStore.setState({ isOfflineSession: false });
     store.setSyncStatus('syncing');
     try {
-      const docsUploaded = await flushQueuedOfflineDocuments(userId);
       const result = await runOutboxSync(userId, supabaseSyncTransport, {
         db: offlineDb,
         forceRetryFailed: options?.forceRetryFailed ?? false,
       });
+      // Upload requirements after registration creates the learner profile.
+      const docsUploaded = await flushQueuedOfflineDocuments(userId);
 
       const userOutbox = await offlineDb.syncOutbox.where('userId').equals(userId).toArray();
       let encounteredReauth = false;

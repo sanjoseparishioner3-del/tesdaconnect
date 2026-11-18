@@ -161,7 +161,7 @@ export function OfflineSyncPage() {
 
   async function handleSyncNow(forceRetryFailed = true) {
     if (!userId) return;
-    const reachable = await verifyServerReachability();
+    const reachable = await verifyServerReachability({ respectBrowserOffline: false });
     if (!reachable) {
       toast.error('Supabase server is unreachable right now. Pending changes stay queued locally.');
       return;
@@ -171,6 +171,15 @@ export function OfflineSyncPage() {
     await refreshAllViews();
     if (useConnectivityStore.getState().syncStatus === 'reauth_required') {
       toast.warning('Re-authentication required before queued mutations can sync.');
+      return;
+    }
+    if (!useConnectivityStore.getState().isOnline) {
+      toast.warning('Connection unavailable. Your changes remain saved on this device.');
+      return;
+    }
+    const counts = await refreshReactiveQueueCounts(userId);
+    if (counts.failedCount || counts.conflictCount || counts.pendingCount) {
+      toast.warning('Some changes still need to upload. Review the queue below.');
       return;
     }
     toast.success(
@@ -194,7 +203,7 @@ export function OfflineSyncPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Sync Center</h1>
           <p className="text-sm text-slate-500">
-            Authorized role data prepares automatically at sign-in and synchronizes seamlessly upon reconnect without manual activation.
+            Review pending uploads, retry failed changes, and check your connection.
           </p>
         </div>
 
@@ -203,7 +212,7 @@ export function OfflineSyncPage() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={!isOnline || syncStatus === 'syncing'}
+            disabled={syncStatus === 'syncing'}
             onClick={() => void handleSyncNow(true)}
           >
             <RefreshCw className={`h-4 w-4 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
@@ -328,7 +337,7 @@ export function OfflineSyncPage() {
               Queued &amp; Failed Offline Mutations ({outboxItems.length})
             </CardTitle>
             <CardDescription>
-              Each record carries a unique UUID idempotency key and retries with exponential backoff until resolved.
+              Your changes stay on this device until the server confirms receipt.
             </CardDescription>
           </div>
           {outboxItems.some((i) => i.status === 'failed') && (

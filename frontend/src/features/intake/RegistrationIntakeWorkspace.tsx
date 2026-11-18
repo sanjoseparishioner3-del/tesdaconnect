@@ -132,7 +132,7 @@ function mapSnapshotToMis0301(
     course_id: asText(app?.course_id),
     course_name: asText(relCourseName, asText(lp?.course_name)),
     scholarship_package: asText(lp?.scholarship_package, asText(app?.scholarship_package)),
-    privacy_consent: lp?.privacy_consent === false ? true : true,
+    privacy_consent: lp?.privacy_consent === true,
     applicant_signature_name: asText(lp?.applicant_signature_name, fallbackFullName ?? ''),
     date_accomplished: asText(lp?.date_accomplished, base.date_accomplished),
     noted_by_name: asText(lp?.noted_by_name),
@@ -249,6 +249,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
 
           if (active && (lpRes.data || appRes.data)) {
             const appData = appRes.data ?? null;
+            if (typeof appData?.client_draft_id === 'string') setClientDraftId(appData.client_draft_id);
             setApplicationStatus(asText(appData?.application_status, 'draft'));
             const mapped = mapSnapshotToMis0301(
               lpRes.data ?? null,
@@ -293,6 +294,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
   }, [userId, isOnline, isStaff, defaultInstId, hydratedOnce, profile?.fullName, profile?.email, form]);
 
   async function handleSelectLearnerForStaff(selectedUserId: string) {
+    setClientDraftId(generateStableId());
     setTargetLearnerUserId(selectedUserId);
     if (!selectedUserId) {
       form.reset(createEmptyMis0301Values(defaultInstId || institutions[0]?.id || ''));
@@ -329,6 +331,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
         defaultInstId || institutions[0]?.id || '',
       ),
     );
+    if (typeof appData?.client_draft_id === 'string') setClientDraftId(appData.client_draft_id);
     toast.info('Loaded learner registration inputs into MIS 03-01 editor.');
   }
 
@@ -359,7 +362,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       const result = typeof reader.result === 'string' ? reader.result : '';
       if (result) {
         form.setValue('id_picture_url', result, { shouldDirty: true, shouldValidate: true });
-        toast.success('Matagumpay na nai-attach ang 2x2 ID picture.');
+        toast.success('ID photo attached.');
       }
     };
     reader.onerror = () => {
@@ -388,7 +391,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       draftType: 'trainee_intake',
       title: titleName,
       institutionId: values.institution_id || null,
-      payload: values,
+      payload: { ...values, target_learner_user_id: targetLearnerUserId || null },
       baseVersion: null,
       status: 'editing',
       updatedAt: nowIso,
@@ -410,13 +413,14 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       });
     }
 
-    toast.success('Registration Inputs saved offline in IndexedDB.');
+    toast.success('Draft saved on this device.');
   }
 
   function handleResumeDraft(draftId: string) {
     const found = savedDrafts.find((d) => d.clientDraftId === draftId);
     if (!found) return;
     setClientDraftId(found.clientDraftId);
+    setTargetLearnerUserId(asText(found.payload.target_learner_user_id));
     form.reset({ ...createEmptyMis0301Values(defaultInstId), ...(found.payload as Partial<Mis0301Values>) });
     toast.info(`Resumed local draft "${found.title}".`);
   }
@@ -424,6 +428,10 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
   async function onSubmit(values: Mis0301Values) {
     if (!userId) {
       toast.warning('Sign in with your account first so the registration can be submitted and synced.');
+      return;
+    }
+    if (isStaff && !targetLearnerUserId) {
+      toast.warning('Select a learner account before submitting registration.');
       return;
     }
     const nowIso = new Date().toISOString();
@@ -459,7 +467,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       draftType: 'trainee_intake',
       title: fullName,
       institutionId: values.institution_id,
-      payload: values,
+      payload: { ...values, target_learner_user_id: targetLearnerUserId || null },
       baseVersion: null,
       status: 'ready_to_sync',
       updatedAt: nowIso,
@@ -483,7 +491,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       setApplicationStatus('submitted');
     }
 
-    await enqueueMutation({
+    const mutation = await enqueueMutation({
       userId,
       entityType: 'trainee_intake',
       entityId: clientDraftId,
@@ -498,27 +506,24 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       baseVersion: null,
     });
 
-    const isOffline = !isOnline || useAuthStore.getState().isOfflineSession;
-    if (!isOffline) {
-      const syncRes = await triggerForegroundSync(userId);
-      if (syncRes.failed === 0 && syncRes.conflicts === 0) {
-        toast.success('Registration Inputs submitted & synchronized cleanly with Supabase.');
-      } else {
-        toast.warning('Registration Intake queued; check Offline & Sync Queue if a conflict occurred.');
-      }
+    // Always recheck reachability: the last offline badge may be stale.
+    await triggerForegroundSync(userId);
+    const queued = await offlineDb.syncOutbox.get(mutation.mutationId);
+    if (!queued) {
+      toast.success('Registration uploaded successfully.');
+    } else if (useConnectivityStore.getState().syncStatus === 'reauth_required') {
+      toast.warning('Registration saved on this device. Sign in online from Sync Center to upload.');
+    } else if (queued.status === 'failed' || queued.status === 'conflict') {
+      toast.warning(queued.lastError ?? 'Registration needs attention. Open Sync Center for details.');
     } else {
-      toast.success('Registration Intake & Enrollment Record saved locally in IndexedDB (Offline mode).');
-    }
-
-    if (isStaff) {
-      setClientDraftId(generateStableId());
+      toast.info('Registration saved on this device and waiting to upload.');
     }
   }
 
   const filteredCourses = React.useMemo(() => {
     if (!watchedValues.institution_id) return courses;
     const subset = courses.filter((c) => c.institution_id === watchedValues.institution_id);
-    return subset.length > 0 ? subset : courses;
+    return subset;
   }, [courses, watchedValues.institution_id]);
 
   return (
@@ -528,13 +533,13 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               {isStaff
-                ? 'Registration Intake & Form Generator (MIS 03-01)'
-                : 'My Registration Inputs & MIS 03-01 Enrollment Form'}
+                ? 'Registration Intake'
+                : 'My Registration'}
             </h1>
             <p className="text-sm text-slate-500">
               {isStaff
-                ? 'Official TESDA MIS 03-01 (ver. 2021) Registration Intake aligned with enrollment objectives. Encode student intake, preview filled/blank forms, or print manual copies.'
-                : 'Your Registration Inputs feed directly into Enrollment Confirmation and auto-populate the official TESDA MIS 03-01 (ver. 2021) Registration Form — works online and offline.'}
+                ? 'Create or update learner details, then submit for review.'
+                : 'Update your details, review your form, and submit your registration.'}
             </p>
           </div>
 
@@ -616,19 +621,19 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Registration Target Record (Registrar / Admin Intake)</CardTitle>
             <CardDescription>
-              Start a fresh Registration Intake or load an existing scholar/applicant profile to update Registration Inputs.
+              Select the learner account whose registration you want to update.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="target_learner">Load Existing Learner (Optional)</Label>
+              <Label htmlFor="target_learner">Learner Account</Label>
               <select
                 id="target_learner"
                 className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                 value={targetLearnerUserId}
                 onChange={(e) => void handleSelectLearnerForStaff(e.target.value)}
               >
-                <option value="">-- New Prospective Trainee / Unlinked Intake --</option>
+                <option value="">-- Select a learner --</option>
                 {existingLearners.map((l) => (
                   <option key={l.user_id} value={l.user_id}>
                     {[l.last_name, l.first_name].filter(Boolean).join(', ') || l.user_id.slice(0, 8)}
@@ -1160,10 +1165,10 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
 
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => void handleSaveDraftLocally()}>
-                <Save className="h-4 w-4" /> Save Draft Offline
+                <Save className="h-4 w-4" /> Save Draft
               </Button>
-              <Button type="submit" variant="secondary" size="sm">
-                <Send className="h-4 w-4" /> {isOnline ? 'Submit Registration' : 'Queue Offline'}
+              <Button type="submit" variant="secondary" size="sm" disabled={form.formState.isSubmitting}>
+                <Send className="h-4 w-4" /> {form.formState.isSubmitting ? 'Saving...' : isOnline ? 'Submit Registration' : 'Save & Queue Upload'}
               </Button>
             </div>
           </div>

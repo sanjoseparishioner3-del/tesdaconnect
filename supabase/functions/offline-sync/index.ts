@@ -352,6 +352,18 @@ Deno.serve(async (req: Request) => {
           ? p.target_learner_user_id
           : userId;
 
+      if (staffCanTargetOther && learnerUserId === userId) {
+        return new Response(JSON.stringify({ status: 'failed', message: 'Select a learner account before submitting intake.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: hasAccess, error: accessError } = await callerClient.rpc('has_institution_access', { target_institution_id: institutionId });
+      if (accessError || !hasAccess) {
+        return new Response(JSON.stringify({ status: 'failed', message: 'Institution access could not be verified.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const fullName = [p.first_name, p.middle_name, p.last_name, p.extension_name]
         .filter((x) => typeof x === 'string' && x.trim().length > 0)
         .join(' ')
@@ -370,12 +382,28 @@ Deno.serve(async (req: Request) => {
 
       const completeness = Math.max(0, Math.min(100, Number(p.record_completeness ?? 0)));
 
+      // Editing registration must retain the enrollment's review/confirmation state.
+      const { data: priorApplication, error: priorError } = await adminClient
+        .from('enrollment_applications').select('learner_user_id, application_status')
+        .eq('client_draft_id', mutation.entityId).maybeSingle();
+      if (priorError) throw new Error(priorError.message);
+      if (priorApplication && priorApplication.learner_user_id !== learnerUserId) {
+        return new Response(JSON.stringify({ status: 'failed', message: 'Registration belongs to another learner.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const nextApplicationStatus = priorApplication &&
+        !['draft', 'returned'].includes(priorApplication.application_status)
+        ? priorApplication.application_status
+        : mutation.operation === 'submit' ? 'submitted' : 'draft';
+
       // Never allow setting ULI during trainee intake; ULI is encoded strictly post-confirmation by Admin/Registrar
-      await adminClient.from('learner_profiles').upsert(
+      const { error: profileError } = await adminClient.from('learner_profiles').upsert(
         {
           user_id: learnerUserId,
           institution_id: institutionId,
-          entry_date: p.entry_date ?? null,
+          entry_date: p.entry_date || null,
+          id_picture_url: p.id_picture_url || null,
           last_name: String(p.last_name ?? 'Pending'),
           first_name: String(p.first_name ?? 'Pending'),
           middle_name: p.middle_name ?? null,
@@ -393,7 +421,7 @@ Deno.serve(async (req: Request) => {
           civil_status: p.civil_status ?? null,
           employment_status: p.employment_status ?? null,
           employment_type: p.employment_type ?? null,
-          birthdate: p.birthdate ?? null,
+          birthdate: p.birthdate || null,
           birthplace_city: p.birthplace_city ?? null,
           birthplace_province: p.birthplace_province ?? null,
           birthplace_region: p.birthplace_region ?? null,
@@ -409,13 +437,19 @@ Deno.serve(async (req: Request) => {
           scholarship_package: p.scholarship_package ?? null,
           privacy_consent: Boolean(p.privacy_consent),
           applicant_signature_name: p.applicant_signature_name ?? null,
-          date_accomplished: p.date_accomplished ?? null,
+          date_accomplished: p.date_accomplished || null,
           noted_by_name: staffCanTargetOther ? (p.noted_by_name ?? null) : null,
-          date_received: staffCanTargetOther ? (p.date_received ?? null) : null,
+          date_received: staffCanTargetOther ? (p.date_received || null) : null,
           submitted_at: mutation.operation === 'submit' ? new Date().toISOString() : null,
         },
         { onConflict: 'user_id' },
       );
+
+      if (profileError) {
+        return new Response(JSON.stringify({ status: 'failed', message: profileError.message }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       const referenceNo = `TC-${new Date().getUTCFullYear()}-${mutation.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
 
@@ -433,7 +467,7 @@ Deno.serve(async (req: Request) => {
               ? p.email_or_facebook
               : (authData.user.email ?? null),
             contact_number: typeof p.contact_number === 'string' ? p.contact_number : null,
-            application_status: mutation.operation === 'submit' ? 'submitted' : 'draft',
+            application_status: nextApplicationStatus,
             record_completeness: completeness,
             submitted_at: mutation.operation === 'submit' ? new Date().toISOString() : null,
           },
@@ -453,7 +487,7 @@ Deno.serve(async (req: Request) => {
         p_institution_id: institutionId,
         p_first_name: String(p.first_name ?? ''),
         p_last_name: String(p.last_name ?? ''),
-        p_birthdate: p.birthdate ?? null,
+        p_birthdate: p.birthdate || null,
         p_email: authData.user.email ?? null,
         p_exclude_user_id: learnerUserId,
       });

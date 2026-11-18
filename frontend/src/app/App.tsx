@@ -106,7 +106,7 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
       const reachable = await verifyServerReachability();
       if (currentProfile) {
         const counts = await refreshReactiveQueueCounts(currentProfile.id);
-        if (reachable && (!alwaysSyncIfPending || counts.pendingCount > 0)) {
+        if (reachable && (!alwaysSyncIfPending || counts.pendingCount > 0 || counts.failedCount > 0)) {
           void triggerForegroundSync(currentProfile.id);
         }
       }
@@ -133,7 +133,7 @@ function ConnectivityAndSessionEffects({ children }: { children: React.ReactNode
     const recoveryHeartbeat = setInterval(() => {
       const conn = useConnectivityStore.getState();
       const currentProfile = useAuthStore.getState().profile;
-      if (currentProfile && (!conn.isOnline || conn.pendingCount > 0)) {
+      if (currentProfile && (!conn.isOnline || conn.pendingCount > 0 || conn.failedCount > 0)) {
         void runAutomaticConnectivityCheck(false);
       }
     }, 30_000);

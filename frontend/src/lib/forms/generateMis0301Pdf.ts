@@ -514,8 +514,8 @@ export async function buildMis0301PdfBytes(
   privLines.forEach((line, idx) => {
     page2.drawText(line, { x: left + 10, y: y2 - 13 - idx * 10.5, size: 7.3, font: fontItalic, color: rgb(0.1, 0.12, 0.16) });
   });
-  drawCheckbox(page2, fontBold, fontReg, left + 175, y2 - 64, 'Agree', filled && (values.privacy_consent as boolean | undefined) === true, 80, 7.5);
-  drawCheckbox(page2, fontBold, fontReg, left + 305, y2 - 64, 'Disagree', filled && (values.privacy_consent as boolean | undefined) === false, 80, 7.5);
+  drawCheckbox(page2, fontBold, fontReg, left + 175, y2 - 64, 'Agree', filled && values.privacy_consent === true, 80, 7.5);
+  drawCheckbox(page2, fontBold, fontReg, left + 305, y2 - 64, 'Disagree', filled && values.privacy_consent === false, 80, 7.5);
   y2 -= privH;
 
   // 10. Applicant's Signature

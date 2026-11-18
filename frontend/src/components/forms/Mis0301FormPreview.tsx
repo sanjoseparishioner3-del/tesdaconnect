@@ -395,8 +395,8 @@ export function Mis0301FormPreview({ values, mode, onModeChange, onClose }: Mis0
             I hereby attest that I have read and understood the Privacy Notice of TESDA through its website (https://www.tesda.gov.ph) and thereby giving my consent in the processing of my personal information indicated in this Learners Profile. The processing includes scholarships, employment, survey, and all other related TESDA programs that may be beneficial to my qualifications.
           </p>
           <div className="flex justify-center gap-16">
-            <CheckboxCell label="Agree" checked={filled && (values.privacy_consent as boolean | undefined) === true} />
-            <CheckboxCell label="Disagree" checked={filled && (values.privacy_consent as boolean | undefined) === false} />
+            <CheckboxCell label="Agree" checked={filled && values.privacy_consent === true} />
+            <CheckboxCell label="Disagree" checked={filled && values.privacy_consent === false} />
           </div>
         </div>
 

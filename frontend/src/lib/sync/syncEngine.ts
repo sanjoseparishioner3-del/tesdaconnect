@@ -21,7 +21,17 @@ export function generateStableId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  // UUIDs are also required when the app is opened on a local HTTP network.
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
 }
 
 export function computeBackoffDelayMs(retryCount: number, baseMs = 2000, maxMs = 300_000): number {
@@ -278,28 +288,17 @@ export async function resolveConflictManually(
   });
 }
 
+/** Preserve legacy intake submissions so the transport can repair institution codes. */
 export async function sanitizeLegacySyncOutbox(db: TesdaConnectOfflineDb = offlineDb): Promise<number> {
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const allMutations = await db.syncOutbox.toArray();
-  let cleanedCount = 0;
-
-  for (const m of allMutations) {
-    if (m.entityType === 'trainee_intake') {
-      const instId = typeof m.payload?.institution_id === 'string' ? m.payload.institution_id.trim() : '';
-      const isInvalidInst = !instId || instId === 'BST' || !uuidPattern.test(instId);
-      const isFailedValidation =
-        m.status === 'failed' &&
-        typeof m.lastError === 'string' &&
-        (m.lastError.includes('institution_id') ||
-          m.lastError.includes('VALIDATION_REJECTED') ||
-          m.lastError.includes('400'));
-
-      if (isInvalidInst || isFailedValidation) {
-        await db.syncOutbox.delete(m.mutationId);
-        cleanedCount += 1;
-      }
-    }
+  const rows = await db.syncOutbox.toArray();
+  let recovered = 0;
+  for (const row of rows) {
+    if (row.entityType !== 'trainee_intake' || row.status !== 'failed' ||
+        !row.lastError?.includes('institution_id')) continue;
+    await db.syncOutbox.update(row.mutationId, {
+      status: 'pending', nextAttemptAt: new Date().toISOString(), lastError: null,
+    });
+    recovered += 1;
   }
-
-  return cleanedCount;
+  return recovered;
 }

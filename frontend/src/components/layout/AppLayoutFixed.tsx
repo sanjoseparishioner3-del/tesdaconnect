@@ -72,6 +72,7 @@ const SECTION_LABELS: Record<NavSection, string> = {
 export function AppLayoutFixed() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const navCollapsed = sidebarCollapsed && !mobileOpen;
   const navigate = useNavigate();
   const profile = useAuthStore((s) => s.profile);
   const activeInstitutionId = useAuthStore((s) => s.activeInstitutionId);
@@ -82,6 +83,7 @@ export function AppLayoutFixed() {
     syncStatus,
     pendingCount,
     conflictCount,
+    failedCount,
     lastSyncedAt,
     storageWarning,
     setStorageWarning,
@@ -157,7 +159,7 @@ export function AppLayoutFixed() {
           className="flex items-center gap-2.5"
           onClick={() => setMobileOpen(false)}
         >
-          {sidebarCollapsed ? (
+          {navCollapsed ? (
             <TesdaLogo size="sm" variant="icon-only" />
           ) : (
             <TesdaLogo size="md" variant="white" showSubtitle />
@@ -175,7 +177,7 @@ export function AppLayoutFixed() {
 
       {/* NAVIGATION - Independent scrolling */}
       <nav
-        className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-2.5 py-3"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-2.5 py-3"
         style={{
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(16, 185, 129, 0.3) transparent',
@@ -184,7 +186,7 @@ export function AppLayoutFixed() {
       >
         {sections.map((group) => (
           <div key={group.section} className="space-y-1">
-            <p className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-emerald-300">
+            <p className={cn("px-2 text-[10px] font-extrabold uppercase tracking-wider text-emerald-300", navCollapsed && "sr-only")}>
               {group.label}
             </p>
             <ul className="space-y-0.5">
@@ -194,6 +196,8 @@ export function AppLayoutFixed() {
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
+                      title={item.label}
+                      aria-label={item.label}
                       onClick={() => setMobileOpen(false)}
                       className={({ isActive }) =>
                         cn(
@@ -206,14 +210,14 @@ export function AppLayoutFixed() {
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <Icon className="h-4 w-4 shrink-0" />
-                        {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                        {!navCollapsed && <span className="truncate">{item.label}</span>}
                       </span>
-                      {item.to === '/sync' && !sidebarCollapsed && (pendingCount > 0 || conflictCount > 0) && (
+                      {item.to === '/sync' && !navCollapsed && (pendingCount > 0 || conflictCount > 0 || failedCount > 0) && (
                         <Badge
-                          variant={conflictCount > 0 ? 'warning' : 'info'}
+                          variant={conflictCount > 0 || failedCount > 0 ? 'warning' : 'info'}
                           className="h-5 px-1.5 text-[10px]"
                         >
-                          {conflictCount > 0 ? `${conflictCount}!` : pendingCount}
+                          {conflictCount + failedCount > 0 ? `${conflictCount + failedCount}!` : pendingCount}
                         </Badge>
                       )}
                     </NavLink>
@@ -240,9 +244,9 @@ export function AppLayoutFixed() {
               ) : (
                 <WifiOff className="h-3.5 w-3.5 text-amber-400" />
               )}
-              {!sidebarCollapsed && (isOnline ? 'Online' : 'Offline')}
+              {!navCollapsed && (isOnline ? 'Online' : 'Offline')}
             </span>
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
                 syncStatus === 'error'
                   ? 'bg-rose-900/80 text-rose-200'
@@ -254,14 +258,14 @@ export function AppLayoutFixed() {
               </span>
             )}
           </div>
-          {!sidebarCollapsed && (
+          {!navCollapsed && (
             <>
               <p className="mt-1 text-[10px] text-emerald-200">
                 Last: {lastSyncedAt ? formatShortDateTime(lastSyncedAt) : 'Not synced'}
               </p>
-              {(pendingCount > 0 || conflictCount > 0) && (
+              {(pendingCount > 0 || conflictCount > 0 || failedCount > 0) && (
                 <p className="mt-0.5 text-[10px] font-medium text-amber-300">
-                  {pendingCount} pending · {conflictCount} conflict(s)
+                  {pendingCount} pending · {failedCount + conflictCount} need attention
                 </p>
               )}
             </>
@@ -274,7 +278,7 @@ export function AppLayoutFixed() {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400 text-xs font-black text-emerald-950">
               {initials}
             </div>
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-white">{profile.fullName}</p>
                 <p className="truncate text-[10px] text-emerald-200">{ROLE_LABELS[profile.role]}</p>
@@ -284,7 +288,7 @@ export function AppLayoutFixed() {
         )}
 
         {/* Install App Shortcut */}
-        {!sidebarCollapsed && (
+        {!navCollapsed && (
           <InstallAppButton className="w-full justify-center border-emerald-600/40 bg-emerald-800/40 text-emerald-100 hover:bg-emerald-800/70 hover:text-white" />
         )}
 
@@ -296,11 +300,11 @@ export function AppLayoutFixed() {
           onClick={handleSignOut}
           className={cn(
             'w-full border-emerald-700/50 bg-transparent text-emerald-100 hover:bg-white/10 hover:text-white',
-            sidebarCollapsed && 'justify-center px-2',
+            navCollapsed && 'justify-center px-2',
           )}
         >
           <LogOut className="h-3.5 w-3.5" />
-          {!sidebarCollapsed && <span className="ml-2">Sign out</span>}
+          {!navCollapsed && <span className="ml-2">Sign out</span>}
         </Button>
       </div>
     </div>
@@ -329,7 +333,7 @@ export function AppLayoutFixed() {
         )}
 
         {/* MAIN CONTENT AREA - Independent scrolling */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* STICKY HEADER */}
           <header className="no-print sticky top-0 z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5 lg:px-5">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
@@ -348,7 +352,7 @@ export function AppLayoutFixed() {
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 className="hidden rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-100 lg:block"
                 aria-label="Toggle sidebar"
-                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 <Menu className="h-4 w-4" />
               </button>
@@ -392,12 +396,13 @@ export function AppLayoutFixed() {
                 variant="ghost"
                 onClick={() => lockDevice('Locked manually.')}
                 title="Lock session"
+                aria-label="Lock session"
                 className="h-7 px-2"
               >
                 <Lock className="h-3.5 w-3.5" />
               </Button>
               <Button asChild type="button" size="sm" variant="ghost" className="hidden h-7 px-2 sm:inline-flex">
-                <Link to="/settings/password">
+                <Link to="/settings/password" aria-label="Account and security" title="Account and security">
                   <KeyRound className="h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -419,7 +424,7 @@ export function AppLayoutFixed() {
           )}
 
           {/* MAIN WORKSPACE - Independently scrollable */}
-          <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <main id="main-content" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-3 sm:p-4 lg:p-6">
               {/* Keeps the header, sidebar and bottom bar on screen while a page chunk loads. */}
               <React.Suspense
