@@ -63,7 +63,7 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 
   if (!cachedClient) {
-    cachedClient = createClient(env.VITE_SUPABASE_URL!, env.VITE_SUPABASE_ANON_KEY!, {
+    cachedClient = createClient(env.VITE_SUPABASE_URL!, env.VITE_SUPABASE_ANON_KEY, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
