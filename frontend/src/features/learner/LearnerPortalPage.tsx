@@ -628,7 +628,7 @@ export function LearnerPortalPage() {
                     Scholar Enrollment Lifecycle Journey
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Subaybayan ang estado ng iyong aplikasyon mula pag-fill up hanggang opisyal na pag-isyu ng TESDA ULI.
+                    Track your application from registration to the official TESDA ULI.
                   </CardDescription>
                 </div>
                 <Badge variant={appStatus === 'confirmed' ? 'success' : appStatus === 'verified' ? 'info' : 'warning'}>
@@ -819,7 +819,7 @@ export function LearnerPortalPage() {
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    Ang ULI ay ang iyong opisyal na pambansang numero para sa lahat ng TESDA training records, certificates, at National Assessments.
+                    The ULI is your official national number for all TESDA training records, certificates and national assessments.
                   </p>
                 </CardContent>
               </Card>
@@ -1017,7 +1017,7 @@ export function LearnerPortalPage() {
                     TESDA Competency Progress &amp; Achievement Charts
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Opisyal na talaan ng iyong mga natutunang kasanayan (Units of Competency) na minarkahan at sinuri ng iyong nakatalagang Trainer / Focal Person.
+                    Official record of the competencies (Units of Competency) assessed and reviewed by your assigned Trainer or Focal Person.
                   </CardDescription>
                 </div>
                 <Badge variant="info">
@@ -1030,7 +1030,7 @@ export function LearnerPortalPage() {
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 shrink-0 text-teal-700 mt-0.5" />
                   <p>
-                    <strong>Tandaan:</strong> Ang <strong>Progress Chart</strong> ay sumasaklaw sa Basic at Common Competencies (Formative Assessments). Ang <strong>Achievement Chart</strong> ay para sa Core Competency practical demonstrations (Summative Assessments). Ang mga datos na ito ay viewable offline kapag na-sync na.
+                    <strong>Note:</strong> The <strong>Progress Chart</strong> covers Basic and Common Competencies (formative assessments). The <strong>Achievement Chart</strong> covers Core Competency practical demonstrations (summative assessments). This data can be viewed offline once synced.
                   </p>
                 </div>
               </div>
@@ -1133,7 +1133,7 @@ export function LearnerPortalPage() {
                     Schedules &amp; Announcements Calendar (View-Only)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Tingnan ang iyong class sessions, training batch schedule, at mga official deadlines mula sa Administrator at Registrar. Accessible din offline.
+                    See your class sessions, training batch schedule and official deadlines from the Administrator and Registrar. Also available offline.
                   </CardDescription>
                 </div>
 

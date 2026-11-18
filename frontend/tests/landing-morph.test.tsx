@@ -65,7 +65,7 @@ describe('Scroll-Driven 3D Laptop Morph Landing Experience', () => {
     const bstButton = screen.getByRole('button', { name: /Balli School of Tech \(BST\)/i });
     await user.click(bstButton);
     expect(bstButton).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByText(/SMAW-NCII Workshop Orientation/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Training Schedules/i).length).toBeGreaterThan(0);
 
     // Verify all 6 separated modular workflow cards are rendered without deprecated modules
     for (const mod of MORPH_MODULE_CARDS) {

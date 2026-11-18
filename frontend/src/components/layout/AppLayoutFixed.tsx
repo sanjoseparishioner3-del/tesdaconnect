@@ -247,7 +247,7 @@ export function AppLayoutFixed() {
         <Link
           to="/sync"
           className="block rounded-lg border border-emerald-700/30 bg-emerald-900/30 p-2 text-xs transition hover:bg-emerald-900/50"
-          title="Buksan ang Offline & Sync Queue"
+          title="Open Sync Center"
         >
           <div className="flex items-center justify-between gap-1.5">
             <span className="flex items-center gap-1.5 font-semibold text-emerald-200">

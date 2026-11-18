@@ -139,7 +139,7 @@ export function DigitalSystemIdCard(props: DigitalSystemIdCardProps) {
               tabIndex={0}
               aria-pressed={flipped}
               aria-label={flipped ? 'Show front of ID card' : 'Flip ID card to view back'}
-              title="I-click para i-flip ang ID"
+              title="Click to flip the ID"
               onClick={toggleFlip}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -334,7 +334,7 @@ export function DigitalSystemIdCard(props: DigitalSystemIdCardProps) {
 
         <p className="flex items-center gap-1.5 text-center text-[11px] text-slate-500 print:hidden">
           <IdCard className="h-3.5 w-3.5 text-slate-400" />
-          Tip: I-click ang card para i-flip · Gumagana offline kapag naka-cache ang profile.
+          Tip: click the card to flip it · Works offline once your profile is cached.
         </p>
       </div>
 
@@ -517,7 +517,7 @@ export function DigitalSystemIdCard(props: DigitalSystemIdCardProps) {
                     Paalala sa Pag-print:
                   </p>
                   <p className="mt-1 text-[11px] leading-relaxed text-teal-800">
-                    Kapag lumabas ang Print dialog ng browser, siguraduhin pong naka-check ang <strong>&quot;Background graphics&quot;</strong> para lumabas ang bughaw at gintong kulay ng badge. Gupitin sa may dashed lines at i-fold sa gitna para maging back-to-back ID.
+                    When the browser print dialog opens, make sure <strong>&quot;Background graphics&quot;</strong> is enabled so the blue and gold badge colors print. Cut along the dashed lines and fold in the middle to make a back-to-back ID.
                   </p>
                 </div>
               </div>

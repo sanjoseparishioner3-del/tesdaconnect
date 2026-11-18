@@ -411,10 +411,10 @@ export function LoginForm({
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 text-xs text-slate-600">
               <div className="flex items-center gap-2 font-semibold text-emerald-950">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                <span>Opisyal na Institutional Authentication</span>
+                <span>Official institutional sign-in</span>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-                Gamitin ang inyong opisyal na email at password na nakatalaga sa database. Kapag nakapag-sign in na nang kahit isang beses sa device na ito, awtomatikong magagamit ang inyong workspace kahit walang internet o data connection.
+                Use the email and password registered for your account. After you have signed in once on this device, your workspace opens automatically even without an internet connection.
               </p>
             </div>
           </form>

@@ -345,12 +345,12 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Pumili ng wastong larawan (PNG, JPG, JPEG, WEBP).');
+      toast.error('Choose a valid image (PNG, JPG, JPEG or WEBP).');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Masyadong malaki ang larawan (maximum 5 MB).');
+      toast.error('The image is too large (maximum 5 MB).');
       return;
     }
 
@@ -363,7 +363,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
       }
     };
     reader.onerror = () => {
-      toast.error('Hindi ma-basa ang napiling larawan.');
+      toast.error('The selected image could not be read.');
     };
     reader.readAsDataURL(file);
   }
@@ -373,7 +373,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
     if (photoInputRef.current) {
       photoInputRef.current.value = '';
     }
-    toast.info('Inalis ang naka-attach na 2x2 ID picture.');
+    toast.info('The attached 2x2 ID picture was removed.');
   }
 
   async function handleSaveDraftLocally() {
@@ -423,7 +423,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
 
   async function onSubmit(values: Mis0301Values) {
     if (!userId) {
-      toast.warning('Mag-sign in muna gamit ang iyong account para mai-submit at mai-sync ang registration.');
+      toast.warning('Sign in with your account first so the registration can be submitted and synced.');
       return;
     }
     const nowIso = new Date().toISOString();
@@ -741,7 +741,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                           </Badge>
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Mag-attach ng malinaw na 2x2 ID picture na may puting background, may kwelyo (collared shirt), at kuha sa loob ng nakaraang 6 na buwan. Automatic itong lalabas sa Form Preview at opisyal na TESDA PDF download.
+                          Attach a clear 2x2 ID picture with a white background, wearing a collared shirt, taken within the last 6 months. It appears automatically in the Form Preview and the official TESDA PDF.
                         </p>
                         <div className="flex flex-wrap items-center gap-2 pt-1">
                           <input
@@ -759,7 +759,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                             onClick={() => photoInputRef.current?.click()}
                           >
                             <Upload className="h-3.5 w-3.5" />
-                            {watchedValues.id_picture_url ? 'Palitan ang 2x2 Picture' : 'Mag-upload ng 2x2 Picture'}
+                            {watchedValues.id_picture_url ? 'Replace 2x2 Picture' : 'Upload 2x2 Picture'}
                           </Button>
                           {watchedValues.id_picture_url && (
                             <Button
@@ -769,7 +769,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                               className="gap-1.5"
                               onClick={handleRemovePhoto}
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Alisin ang Picture
+                              <Trash2 className="h-3.5 w-3.5" /> Remove Picture
                             </Button>
                           )}
                         </div>
