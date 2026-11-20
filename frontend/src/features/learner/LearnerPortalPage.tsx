@@ -6,24 +6,14 @@ import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  AlertTriangle,
   Award,
   BookOpen,
   CalendarDays,
-  Check,
   CheckCircle2,
   ClipboardCheck,
-  Clock,
-  CloudOff,
-  Copy,
-  FileCheck,
   FileText,
-  FolderUp,
-  GraduationCap,
   IdCard,
   Info,
-  ShieldCheck,
-  Sparkles,
   Upload,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -32,14 +22,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { InstallAppButton } from '@/components/pwa/PwaInstallBanner';
 import { RegistrationIntakeWorkspace } from '@/features/intake/RegistrationIntakeWorkspace';
-import { DigitalSystemIdCard } from '@/features/learner/DigitalSystemIdCard';
+import { ScholarHome } from '@/features/learner/home/ScholarHome';
+import { ScheduleAgenda, type AgendaBatch, type AgendaEvent } from '@/features/learner/schedule/ScheduleAgenda';
 import { LearnerDocumentsPanel } from '@/features/learner/documents/LearnerDocumentsPanel';
 import { useLearnerDocuments } from '@/features/learner/documents/learnerDocuments';
 import { DEFAULT_LEARNER_TAB, parseLearnerTab, type LearnerTab } from '@/features/learner/learnerTabs';
 import { offlineDb } from '@/lib/db/dexie';
-import { normalizeDocumentTypeKey, TESDA_REQUIRED_DOCUMENTS } from '@/lib/documents/requiredDocuments';
+import { normalizeDocumentTypeKey } from '@/lib/documents/requiredDocuments';
 import { PHONE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -369,6 +359,34 @@ export function LearnerPortalPage() {
     return [...batchItems, ...annItems];
   }, [isOnline, liveBatchesQuery.data, cachedSchedules, liveScheduledAnnQuery.data, cachedAnnouncements]);
 
+  const agendaBatches = React.useMemo<AgendaBatch[]>(() => {
+    if (isOnline && liveBatchesQuery.data && liveBatchesQuery.data.length > 0) {
+      return liveBatchesQuery.data.map((b) => {
+        const c = Array.isArray(b.courses) ? b.courses[0] : b.courses;
+        return {
+          id: b.id,
+          code: b.code,
+          course: c?.name ?? b.name,
+          status: b.status,
+          startsAt: b.starts_at,
+          endsAt: b.ends_at,
+          nextClassAt: null,
+          venue: b.venue,
+        };
+      });
+    }
+    return cachedSchedules.map((sch) => ({
+      id: sch.id,
+      code: sch.batchCode,
+      course: sch.courseName,
+      status: sch.status,
+      startsAt: sch.startsAt,
+      endsAt: sch.endsAt,
+      nextClassAt: sch.nextClassAt,
+      venue: sch.venue,
+    }));
+  }, [isOnline, liveBatchesQuery.data, cachedSchedules]);
+
   const announcementsList = React.useMemo(() => {
     return isOnline && liveScheduledAnnQuery.data && liveScheduledAnnQuery.data.length > 0
       ? liveScheduledAnnQuery.data.map((a) => ({
@@ -388,6 +406,34 @@ export function LearnerPortalPage() {
           type: a.announcementType,
         }));
   }, [isOnline, liveScheduledAnnQuery.data, cachedAnnouncements]);
+
+  // Real "coming up" data for the home screen: next class and newest announcement.
+  const nextClass = React.useMemo(() => {
+    const now = Date.now();
+    const candidates = cachedSchedules
+      .map((sch) => ({
+        title: `${sch.batchCode}: ${sch.courseName}`,
+        startsAt: sch.nextClassAt ?? sch.startsAt,
+        venue: sch.venue,
+      }))
+      .filter((c): c is { title: string; startsAt: string; venue: string | null } => Boolean(c.startsAt))
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const upcoming = candidates.find((c) => new Date(c.startsAt).getTime() >= now - 3600_000);
+    return upcoming ?? null;
+  }, [cachedSchedules]);
+
+  const latestAnnouncement = React.useMemo(() => {
+    const newest = [...cachedAnnouncements].sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))[0];
+    return newest ? { title: newest.title, body: newest.body, date: newest.publishedAt ?? null } : null;
+  }, [cachedAnnouncements]);
+
+  const agendaEvents = React.useMemo<AgendaEvent[]>(
+    () =>
+      announcementsList
+        .filter((a): a is typeof a & { eventDate: string } => Boolean(a.eventDate))
+        .map((a) => ({ id: a.id, title: a.title, date: a.eventDate, time: a.eventTime ?? null, type: a.type ?? 'general' })),
+    [announcementsList],
+  );
 
   const announcementsPagination = usePagination({
     totalRecords: announcementsList.length,
@@ -409,14 +455,6 @@ export function LearnerPortalPage() {
   const appStatus = (ownApp?.application_status || 'draft').toLowerCase();
   const completeness = ownApp?.record_completeness ?? 0;
 
-  // Enrollment Journey Step index
-  const activeStep = React.useMemo(() => {
-    if (appStatus === 'confirmed') return 4;
-    if (appStatus === 'verified') return 3;
-    if (appStatus === 'submitted') return 3;
-    if (docCompliance.complete) return 2;
-    return 1;
-  }, [appStatus, docCompliance.complete]);
 
   function copyTextToClipboard(text: string, label: string) {
     void navigator.clipboard.writeText(text);
@@ -425,156 +463,6 @@ export function LearnerPortalPage() {
 
   return (
     <div className="min-w-0 space-y-4 sm:space-y-6">
-      {/* ================= HERO BANNER (Home only: other sections start with their own content) ================= */}
-      {tab === 'overview' && (
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-900 via-[#0f295c] to-teal-950 p-4 text-white shadow-xl sm:p-6">
-        <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 h-32 w-80 rounded-full bg-amber-400/10 blur-2xl" />
-
-        <div className="relative z-10 flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white/20 bg-white/10 shadow-inner backdrop-blur-md sm:h-16 sm:w-16">
-              {idPhotoUrl ? (
-                <img src={idPhotoUrl} alt={profile?.fullName ?? 'Scholar'} className="h-full w-full object-cover" />
-              ) : (
-                <GraduationCap className="h-8 w-8 text-teal-300" />
-              )}
-              <span
-                className={`absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-slate-900 ${
-                  isOnline ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-                title={isOnline ? 'Online' : 'Offline Cache Mode'}
-              />
-            </div>
-
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="break-words text-xl font-black tracking-tight text-white sm:text-3xl">
-                  {profile?.fullName ?? 'TESDA Scholar'}
-                </h1>
-                <span className="rounded-full bg-teal-400/20 px-2.5 py-0.5 text-xs font-semibold text-teal-200 ring-1 ring-inset ring-teal-400/30">
-                  {profile ? ROLE_LABELS[profile.role] : 'Scholar / Trainee'}
-                </span>
-              </div>
-
-              <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-300">
-                <span className="font-semibold text-amber-300">
-                  {relInst?.name ?? profile?.institutions?.[0]?.name ?? 'Balli School of Technology'}
-                </span>
-                <span>•</span>
-                <span>Campus Code: {relInst?.code ?? profile?.institutions?.[0]?.code ?? 'BST'}</span>
-                {ownApp?.reference_no && (
-                  <>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => copyTextToClipboard(ownApp.reference_no, 'Application Reference')}
-                      className="inline-flex items-center gap-1 font-mono text-teal-200 transition-colors hover:text-white"
-                      title="Click to copy reference"
-                    >
-                      REF: {ownApp.reference_no}
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Badge
-              variant={isOnline ? 'success' : 'warning'}
-              className="px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur-sm"
-            >
-              {isOnline ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Online Ready
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  <CloudOff className="h-3.5 w-3.5 text-amber-300" />
-                  Offline Cache Mode
-                </span>
-              )}
-            </Badge>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setTab('intake')}
-              className="border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 hover:text-white"
-            >
-              <FileText className="mr-1.5 h-3.5 w-3.5" />
-              Edit MIS 03-01
-            </Button>
-
-            <InstallAppButton className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" />
-          </div>
-        </div>
-
-        {/* Quick KPI Cards Grid */}
-        <div className="relative z-10 mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-4 sm:gap-3">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <p className="text-[11px] font-medium text-slate-300">Enrollment Status</p>
-            <p className="mt-1 text-sm font-bold uppercase tracking-wider text-teal-300">
-              {ownApp?.application_status ?? 'Draft'}
-            </p>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-              <span>Completeness</span>
-              <span className="font-semibold text-white">{completeness}%</span>
-            </div>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(0, completeness))}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <p className="text-[11px] font-medium text-slate-300">Document Compliance</p>
-            <p className="mt-1 text-sm font-bold text-white">
-              {uploadedTypesCount} <span className="text-xs font-normal text-slate-300">of {requiredDocsTotal} Submitted</span>
-            </p>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-              <span>Mandatory Requirements</span>
-              <span className="font-semibold text-amber-300">{docCompliance.complete ? 'Complete' : 'Incomplete'}</span>
-            </div>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  docCompliance.complete ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-                style={{ width: `${(uploadedTypesCount / Math.max(1, requiredDocsTotal)) * 100}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <p className="text-[11px] font-medium text-slate-300">Enrolled Qualification</p>
-            <p className="mt-1 truncate text-sm font-bold text-white" title={relCourse?.name ?? 'Not assigned yet'}>
-              {relCourse?.name ?? 'Not assigned yet'}
-            </p>
-            <p className="mt-2 text-[10px] text-slate-400">
-              Batch: <span className="font-semibold text-teal-200">{ownApp?.scholar_id ?? 'Pending assignment'}</span>
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <p className="text-[11px] font-medium text-slate-300">TESDA Main ULI</p>
-            <p className={`mt-1 font-mono text-sm font-bold ${appStatus === 'confirmed' && uliValue ? 'text-emerald-300' : 'text-slate-300'}`}>
-              {appStatus === 'confirmed' && uliValue ? uliValue : 'Pending ULI'}
-            </p>
-            <p className="mt-2 text-[10px] text-slate-400">
-              {appStatus === 'confirmed' ? 'Verified by TESDA Main' : 'Encoded after confirmation'}
-            </p>
-          </div>
-        </div>
-      </div>
-      )}
-
       {/* ================= NAVIGATION TABS ================= */}
       {/* Phones use the bottom tab bar (LearnerBottomNav); tablets and desktop use these tabs. */}
       <div className="hidden pb-3 md:block">
@@ -615,388 +503,45 @@ export function LearnerPortalPage() {
         </div>
       </div>
 
-      {/* ================= TAB 1: OVERVIEW & DIGITAL ID ================= */}
+      {/* ================= HOME ================= */}
       {tab === 'overview' && (
-        <div className="space-y-6">
-          {/* Enrollment Milestones Stepper */}
-          <Card className="border-slate-200 bg-white shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-                    <Sparkles className="h-4 w-4 text-teal-600" />
-                    Scholar Enrollment Lifecycle Journey
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Track your application from registration to the official TESDA ULI.
-                  </CardDescription>
-                </div>
-                <Badge variant={appStatus === 'confirmed' ? 'success' : appStatus === 'verified' ? 'info' : 'warning'}>
-                  Current: {appStatus.toUpperCase()}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-                {/* Step 1 */}
-                <div
-                  onClick={() => setTab('intake')}
-                  className={`group relative cursor-pointer rounded-xl border p-3.5 transition-all hover:shadow-sm ${
-                    completeness >= 80
-                      ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950'
-                      : activeStep === 1
-                        ? 'border-teal-500 bg-teal-50/70 ring-2 ring-teal-200'
-                        : 'border-slate-200 bg-slate-50/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-800 text-xs font-bold text-white">
-                      {completeness >= 80 ? <Check className="h-3.5 w-3.5" /> : '1'}
-                    </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      {completeness}% encoded
-                    </span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-slate-900 group-hover:text-teal-800">
-                    1. MIS 03-01 Registration
-                  </h4>
-                  <p className="mt-0.5 text-[11px] text-slate-600">Personal &amp; Demographic Profile</p>
-                </div>
-
-                {/* Step 2 */}
-                <div
-                  onClick={() => setTab('requirements')}
-                  className={`group relative cursor-pointer rounded-xl border p-3.5 transition-all hover:shadow-sm ${
-                    docCompliance.complete
-                      ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950'
-                      : activeStep === 2
-                        ? 'border-teal-500 bg-teal-50/70 ring-2 ring-teal-200'
-                        : 'border-slate-200 bg-slate-50/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-800 text-xs font-bold text-white">
-                      {docCompliance.complete ? <Check className="h-3.5 w-3.5" /> : '2'}
-                    </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      {uploadedTypesCount}/{requiredDocsTotal} docs
-                    </span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-slate-900 group-hover:text-teal-800">
-                    2. 8 Required Documents
-                  </h4>
-                  <p className="mt-0.5 text-[11px] text-slate-600">PSA, Form 137, 2x2 Photo, etc.</p>
-                </div>
-
-                {/* Step 3 */}
-                <div
-                  className={`relative rounded-xl border p-3.5 ${
-                    appStatus === 'verified' || appStatus === 'confirmed'
-                      ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950'
-                      : appStatus === 'submitted'
-                        ? 'border-teal-500 bg-teal-50/70 ring-2 ring-teal-200'
-                        : 'border-slate-200 bg-slate-50/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-800 text-xs font-bold text-white">
-                      {appStatus === 'verified' || appStatus === 'confirmed' ? <Check className="h-3.5 w-3.5" /> : '3'}
-                    </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Registrar
-                    </span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-slate-900">
-                    3. Registrar Review
-                  </h4>
-                  <p className="mt-0.5 text-[11px] text-slate-600">Evaluation &amp; Verification</p>
-                </div>
-
-                {/* Step 4 */}
-                <div
-                  className={`relative rounded-xl border p-3.5 ${
-                    appStatus === 'confirmed'
-                      ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950'
-                      : 'border-slate-200 bg-slate-50/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-800 text-xs font-bold text-white">
-                      {appStatus === 'confirmed' ? <Check className="h-3.5 w-3.5" /> : '4'}
-                    </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      TESDA Main
-                    </span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-slate-900">
-                    4. Confirmation &amp; ULI
-                  </h4>
-                  <p className="mt-0.5 text-[11px] text-slate-600">Official ULI Issued</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-            {/* Left Column: Academic & Enrollment Details */}
-            <div className="min-w-0 space-y-4 lg:col-span-7">
-              {/* Reference & Scholar ID Cards */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Card className="border-slate-200 transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Application Reference
-                    </CardDescription>
-                    <CardTitle className="flex items-center justify-between font-mono text-base text-slate-900">
-                      <span>{ownApp?.reference_no ?? 'Pending Registration Intake'}</span>
-                      {ownApp?.reference_no && (
-                        <button
-                          type="button"
-                          onClick={() => copyTextToClipboard(ownApp.reference_no, 'Application Reference')}
-                          className="text-slate-400 hover:text-slate-700"
-                          title="Copy reference number"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-xs text-slate-600">
-                    Status: <strong className="capitalize text-teal-800">{ownApp?.application_status ?? 'draft'}</strong> · Completeness:{' '}
-                    <strong>{ownApp?.record_completeness ?? 0}%</strong>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Confirmed Scholar ID
-                    </CardDescription>
-                    <CardTitle className="font-mono text-base text-teal-800">
-                      {ownApp?.scholar_id ?? 'Pending confirmation'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-xs text-slate-600">
-                    Generated by Registrar/Admin confirmation.
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Official TESDA ULI Card */}
-              <Card className="border-teal-200 bg-gradient-to-br from-teal-50/30 to-white shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-base text-slate-900">
-                      <ShieldCheck className="h-5 w-5 text-teal-700" />
-                      TESDA Main Unique Learner Identifier (ULI)
-                    </CardTitle>
-                    {ownApp?.application_status === 'confirmed' && uliValue ? (
-                      <Badge variant="success">Confirmed &amp; Active</Badge>
-                    ) : (
-                      <Badge variant="outline">Pending Issuance</Badge>
-                    )}
-                  </div>
-                  <CardDescription className="text-xs">
-                    Assigned strictly by the Registrar or Administrator after your enrollment confirmation and receipt from TESDA Main.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 font-mono font-bold text-slate-900">
-                    <span className="text-sm sm:text-base">
-                      {ownApp?.application_status === 'confirmed' && uliValue
-                        ? uliValue
-                        : 'Pending TESDA Main ULI (Encoded after confirmation)'}
-                    </span>
-                    {ownApp?.application_status === 'confirmed' && uliValue && (
-                      <button
-                        type="button"
-                        onClick={() => copyTextToClipboard(uliValue, 'TESDA Main ULI')}
-                        className="text-teal-700 hover:text-teal-900"
-                        title="Copy ULI"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    The ULI is your official national number for all TESDA training records, certificates and national assessments.
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Registrar Remarks Callout (if present) */}
-              {ownApp?.remarks && (
-                <Card className="border-amber-300 bg-amber-50/70 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm text-amber-950">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      Registrar Review Remarks &amp; Corrections
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-xs leading-relaxed text-amber-900">
-                    {ownApp.remarks}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Document Compliance Summary Card */}
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <FileCheck className="h-4 w-4 text-teal-700" />
-                      8 Documentary Requirements Status
-                    </CardTitle>
-                    <span className="text-xs font-semibold text-slate-600">
-                      {uploadedTypesCount} / {requiredDocsTotal} Submitted
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        docCompliance.complete ? 'bg-emerald-500' : 'bg-teal-600'
-                      }`}
-                      style={{ width: `${(uploadedTypesCount / Math.max(1, requiredDocsTotal)) * 100}%` }}
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {TESDA_REQUIRED_DOCUMENTS.map((req) => {
-                      const isUploaded = displayedDocs.some(
-                        (d) => normalizeDocumentTypeKey(d.document_type) === req.key,
-                      );
-                      return (
-                        <span
-                          key={req.key}
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium ${
-                            isUploaded
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}
-                        >
-                          {isUploaded ? <Check className="h-3 w-3 text-emerald-600" /> : <Clock className="h-3 w-3 text-slate-400" />}
-                          {req.label}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setTab('requirements')}
-                      className="w-full text-xs text-teal-800 hover:bg-teal-50"
-                    >
-                      <FolderUp className="mr-1.5 h-3.5 w-3.5" />
-                      Manage &amp; Upload Requirements ({displayedDocs.length} saved files)
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick Actions Grid */}
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-slate-900">
-                    Quick Navigation &amp; Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setTab('intake')}
-                    className="flex h-auto flex-col items-start p-3 text-left hover:border-teal-300 hover:bg-teal-50/40"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                      <FileText className="h-4 w-4 text-teal-700" />
-                      MIS 03-01 Registration Form
-                    </span>
-                    <span className="mt-1 text-[11px] text-slate-500">
-                      Encoded inputs, personal details, &amp; PDF print
-                    </span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setTab('requirements')}
-                    className="flex h-auto flex-col items-start p-3 text-left hover:border-teal-300 hover:bg-teal-50/40"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                      <Upload className="h-4 w-4 text-teal-700" />
-                      Upload 8 Documents
-                    </span>
-                    <span className="mt-1 text-[11px] text-slate-500">
-                      PSA, 2x2 photos, valid IDs, medical cert
-                    </span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setTab('schedules')}
-                    className="flex h-auto flex-col items-start p-3 text-left hover:border-teal-300 hover:bg-teal-50/40"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                      <CalendarDays className="h-4 w-4 text-teal-700" />
-                      Calendar &amp; Announcements
-                    </span>
-                    <span className="mt-1 text-[11px] text-slate-500">
-                      Batch classes, exam dates, deadlines
-                    </span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setTab('progress')}
-                    className="flex h-auto flex-col items-start p-3 text-left hover:border-teal-300 hover:bg-teal-50/40"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                      <ClipboardCheck className="h-4 w-4 text-teal-700" />
-                      Competency Charts
-                    </span>
-                    <span className="mt-1 text-[11px] text-slate-500">
-                      Progress and achievement records by Focal Person
-                    </span>
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column: 3D Flipping Digital System ID Card */}
-            <div className="flex flex-col items-center justify-start lg:col-span-5">
-              <div className="w-full rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50/70 to-white p-4 shadow-sm sm:p-6">
-                <div className="mb-3 text-center">
-                  <h3 className="text-sm font-bold text-slate-900">Digital System Account ID Card</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Woven school lanyard · 3D flipping card with front and back credentials
-                  </p>
-                </div>
-
-                <DigitalSystemIdCard
-                  fullName={profile?.fullName ?? 'Learner'}
-                  email={profile?.email}
-                  systemAccountId={userId || 'SYSTEM-ACCOUNT'}
-                  roleLabel={profile ? ROLE_LABELS[profile.role] : 'Scholar / Student'}
-                  institutionCode={relInst?.code ?? profile?.institutions?.[0]?.code}
-                  institutionName={relInst?.name ?? profile?.institutions?.[0]?.name}
-                  courseName={relCourse?.name}
-                  scholarId={ownApp?.scholar_id}
-                  enrollmentStatus={ownApp?.application_status}
-                  uliNumber={uliValue}
-                  photoUrl={idPhotoUrl}
-                  contactNumber={asText(ownProfileData?.contact_number) || null}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <ScholarHome
+          fullName={profile?.fullName ?? 'Scholar'}
+          roleLabel={profile ? ROLE_LABELS[profile.role] : 'Scholar'}
+          campusName={relInst?.name ?? profile?.institutions?.[0]?.name ?? ''}
+          campusCode={relInst?.code ?? profile?.institutions?.[0]?.code ?? ''}
+          isOnline={isOnline}
+          photoUrl={idPhotoUrl}
+          appStatus={appStatus}
+          referenceNo={ownApp?.reference_no ?? null}
+          completeness={completeness}
+          remarks={ownApp?.remarks ?? null}
+          docsSubmitted={uploadedTypesCount}
+          docsRequired={requiredDocsTotal}
+          docsWaiting={docCompliance.waiting}
+          courseName={relCourse?.name ?? null}
+          scholarId={ownApp?.scholar_id ?? null}
+          uli={uliValue}
+          nextClass={nextClass}
+          latestAnnouncement={latestAnnouncement}
+          isLoading={enrollmentQuery.isLoading && !cachedLearnerSnapshot}
+          onNavigate={setTab}
+          onCopy={copyTextToClipboard}
+          idCardProps={{
+            fullName: profile?.fullName ?? 'Learner',
+            email: profile?.email,
+            systemAccountId: userId || 'SYSTEM-ACCOUNT',
+            roleLabel: profile ? ROLE_LABELS[profile.role] : 'Scholar / Student',
+            institutionCode: relInst?.code ?? profile?.institutions?.[0]?.code,
+            institutionName: relInst?.name ?? profile?.institutions?.[0]?.name,
+            courseName: relCourse?.name,
+            scholarId: ownApp?.scholar_id,
+            enrollmentStatus: ownApp?.application_status,
+            uliNumber: uliValue,
+            photoUrl: idPhotoUrl,
+            contactNumber: asText(ownProfileData?.contact_number) || null,
+          }}
+        />
       )}
 
       {/* ================= TAB 2: REGISTRATION INTAKE (MIS 03-01) ================= */}
@@ -1026,7 +571,7 @@ export function LearnerPortalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3.5 text-xs text-teal-950">
+              <div className="hidden rounded-xl border border-teal-200 bg-teal-50/50 p-3.5 text-xs text-teal-950 md:block">
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 shrink-0 text-teal-700 mt-0.5" />
                   <p>
@@ -1130,14 +675,14 @@ export function LearnerPortalPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
                     <CalendarDays className="h-5 w-5 text-teal-700" />
-                    Schedules &amp; Announcements Calendar (View-Only)
+                    Schedule
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    See your class sessions, training batch schedule and official deadlines from the Administrator and Registrar. Also available offline.
+                  <CardDescription className="hidden text-xs md:block">
+                    Your class sessions, training batch and official deadlines. Also available offline.
                   </CardDescription>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-xs">
+                <div className="hidden flex-wrap items-center gap-2 text-xs md:flex">
                   <span className="flex items-center gap-1 rounded-md bg-[#0f295c] px-2 py-1 text-white">
                     <span className="h-2 w-2 rounded-full bg-blue-300" /> Training Batch Sessions
                   </span>
@@ -1151,23 +696,22 @@ export function LearnerPortalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="w-full rounded-xl border border-slate-200 p-2 sm:p-4">
-                {/* Phones get an agenda list (no sideways scrolling); larger screens keep the grid. */}
-                <FullCalendar
-                  key={isPhone ? 'phone' : 'wide'}
-                  plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
-                  initialView={isPhone ? 'listMonth' : 'dayGridMonth'}
-                  headerToolbar={
-                    isPhone
-                      ? { left: 'prev,next', center: 'title', right: 'today' }
-                      : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listMonth' }
-                  }
-                  buttonText={{ listMonth: 'list' }}
-                  noEventsContent="No classes or deadlines this month."
-                  events={studentCalendarEvents}
-                  height="auto"
-                />
-              </div>
+              {isPhone ? (
+                // Phones: an agenda (one card per batch, upcoming dates) instead of a cramped grid.
+                <ScheduleAgenda batches={agendaBatches} events={agendaEvents} />
+              ) : (
+                <div className="w-full rounded-xl border border-slate-200 p-2 sm:p-4">
+                  <FullCalendar
+                    plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listMonth' }}
+                    buttonText={{ listMonth: 'list' }}
+                    noEventsContent="No classes or deadlines this month."
+                    events={studentCalendarEvents}
+                    height="auto"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 

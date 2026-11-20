@@ -7,7 +7,15 @@ import { HERO_PRESETS, type HeroPresetKey } from '@/lib/landing/laptopMetrics';
 export interface LaptopScrollState {
   progress: number;
   isPinnedDesktop: boolean;
+  /** 0 = lid closed, 1 = fully open. Animated by GSAP (intro) and defaults to open. */
+  lid?: number;
+  /** 'mobile' drives the portrait phone/tablet choreography from `progress`. */
+  mode?: 'mobile';
 }
+
+/** LidPivot rotation (radians about X) when the lid is shut flat over the keyboard. */
+const LID_CLOSED_ANGLE = 1.5;
+const LID_OPEN_ANGLE = -0.14;
 
 export type LoginScreenVariant = 'staff' | 'scholar';
 
@@ -16,6 +24,10 @@ interface LaptopCanvasSceneProps {
   scrollStateRef: React.MutableRefObject<LaptopScrollState>;
   portalView?: LoginScreenVariant;
   onWebglError?: () => void;
+  /** 'balanced' trims shadows, pixel ratio and lighting cost for phones. */
+  quality?: 'high' | 'balanced';
+  /** When false the render loop is paused (section scrolled out of view). */
+  active?: boolean;
 }
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
@@ -369,8 +381,43 @@ function ProceduralGlbLaptop({ activePreset, scrollStateRef, portalView = 'staff
     const group = rootRef.current;
     if (!group) return;
 
-    const { progress, isPinnedDesktop } = scrollStateRef.current;
+    const { progress, isPinnedDesktop, mode } = scrollStateRef.current;
+    const lid = scrollStateRef.current.lid ?? 1;
+    const lidEase = lid * lid * (3 - 2 * lid);
+    const applyLid = (openAngle: number) => {
+      if (lidPivotRef.current) {
+        lidPivotRef.current.rotation.x = lerp(LID_CLOSED_ANGLE, openAngle, lidEase);
+      }
+    };
     const t = state.clock.getElapsedTime();
+
+    if (mode === 'mobile') {
+      // Portrait choreography: closed laptop opens, turns from a 3/4 view to face the viewer and
+      // grows slightly while the scroll position (GSAP ScrollTrigger scrub) advances `progress`.
+      group.visible = true;
+      const e = smoothstep(0.1, 0.55, progress);
+      const sway = Math.sin(t * 0.9) * 0.04 * (1 - e * 0.6);
+      // Face-on width is ~2.94 world units: keep it inside the screen with a small margin.
+      const fit = Math.min((state.viewport.width * 0.9) / 2.94, 0.8);
+      const vh = state.viewport.height;
+      group.position.set(0, lerp(-vh * 0.2, vh * 0.045, e) + Math.sin(t * 1.3) * 0.012, lerp(0, 0.3, e));
+      group.rotation.set(
+        lerp(0.26, 0.03, e) + state.pointer.y * 0.03,
+        lerp(-0.45, -0.02, e) + sway + state.pointer.x * 0.04,
+        0,
+      );
+      group.scale.setScalar(fit * lerp(0.8, 1, e));
+      applyLid(lerp(-0.2, -0.1, e));
+      for (const mat of chassisMaterialsRef.current) {
+        mat.opacity = 1;
+        mat.depthWrite = true;
+      }
+      if (screenMaterialRef.current) screenMaterialRef.current.opacity = 1;
+      // The CSS gradient behind the canvas provides the glow; flat planes only add haze on phones.
+      if (glowRef.current) glowRef.current.visible = false;
+      if (shadowGroupRef.current) shadowGroupRef.current.visible = false;
+      return;
+    }
 
     if (!isPinnedDesktop) {
       // Gentle responsive idle hover when rendered without desktop pin
@@ -378,6 +425,7 @@ function ProceduralGlbLaptop({ activePreset, scrollStateRef, portalView = 'staff
       group.position.set(0, Math.sin(t * 1.4) * 0.035, 0);
       group.rotation.set(0.12 + state.pointer.y * 0.04, -0.25 + state.pointer.x * 0.08, 0);
       group.scale.setScalar(0.95);
+      applyLid(LID_OPEN_ANGLE);
       for (const mat of chassisMaterialsRef.current) {
         mat.opacity = 1;
         mat.depthWrite = true;
@@ -423,9 +471,7 @@ function ProceduralGlbLaptop({ activePreset, scrollStateRef, portalView = 'staff
     group.scale.setScalar(morphScale);
 
     // Straighten LidPivot during Stage 2 so ScreenDisplay aligns parallel to HTML dashboard
-    if (lidPivotRef.current) {
-      lidPivotRef.current.rotation.x = lerp(-0.14, 0, t2);
-    }
+    applyLid(lerp(LID_OPEN_ANGLE, 0, t2));
 
     // Smooth opacity crossfade of chassis and 3D ScreenDisplay cleanly ahead of DOM handoff
     const chassisOpacity = Math.max(0, 1 - smoothstep(0.4, 0.48, progress));
@@ -511,7 +557,10 @@ export default function LaptopCanvasScene({
   scrollStateRef,
   portalView = 'staff',
   onWebglError,
+  quality = 'high',
+  active = true,
 }: LaptopCanvasSceneProps) {
+  const balanced = quality === 'balanced';
   const isMountedRef = React.useRef(true);
   React.useEffect(() => {
     isMountedRef.current = true;
@@ -523,13 +572,14 @@ export default function LaptopCanvasScene({
   return (
     <WebglCanvasErrorBoundary onErrorFallback={onWebglError}>
       <Canvas
-        dpr={[1, 1.75]}
-        shadows
+        dpr={balanced ? [1, 1.5] : [1, 1.75]}
+        shadows={!balanced}
+        frameloop={active ? 'always' : 'never'}
         camera={{ position: [0, 0.32, 5.2], fov: 36, near: 0.1, far: 40 }}
         gl={{
-          antialias: true,
+          antialias: !balanced,
           alpha: true,
-          powerPreference: 'high-performance',
+          powerPreference: balanced ? 'default' : 'high-performance',
         }}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener(
@@ -552,11 +602,11 @@ export default function LaptopCanvasScene({
         {/* Clean institutional bright studio lighting on transparent/white stage */}
         <ambientLight intensity={0.85} color="#ffffff" />
         <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#e2e8f0" />
-        <directionalLight position={[4.5, 6.5, 5.5]} intensity={1.75} color="#ffffff" castShadow />
+        <directionalLight position={[4.5, 6.5, 5.5]} intensity={1.75} color="#ffffff" castShadow={!balanced} />
         <directionalLight position={[-4.5, 2.5, 3.5]} intensity={0.7} color="#ecfdf5" />
 
         {/* Offline declarative HDR-free studio lightformers */}
-        <Environment resolution={128}>
+        <Environment resolution={balanced ? 64 : 128}>
           <Lightformer form="rect" intensity={2.2} position={[0, 5, 3]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 4, 1]} color="#ffffff" />
           <Lightformer form="rect" intensity={1.4} position={[-5, 2, 2]} rotation={[0, Math.PI / 2, 0]} scale={[6, 3, 1]} color="#ecfdf5" />
           <Lightformer form="rect" intensity={1.5} position={[5, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 3, 1]} color="#f8fafc" />

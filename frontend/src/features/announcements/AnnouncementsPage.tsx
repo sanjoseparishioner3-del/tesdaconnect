@@ -311,11 +311,11 @@ export function AnnouncementsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-            <Megaphone className="h-6 w-6 text-teal-700" />
-            Institutional Announcements
+          <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
+            <Megaphone className="h-5 w-5 text-teal-700 sm:h-6 sm:w-6" />
+            Announcements
           </h1>
-          <p className="text-sm text-slate-500">
+          <p className="hidden text-sm text-slate-500 sm:block">
             {profile?.role === 'registrar'
               ? 'Registrars may announce exclusively to Focal Persons and Scholars / Students.'
               : canPublish
@@ -326,7 +326,7 @@ export function AnnouncementsPage() {
 
         <Badge variant={isOnline ? 'success' : 'warning'}>
           {isOnline ? (
-            'Online Delivery Status Verified'
+            'Online'
           ) : (
             <span className="inline-flex items-center gap-1">
               <CloudOff className="h-3.5 w-3.5" /> Offline Snapshot ({lastSyncedAt ? formatShortDateTime(lastSyncedAt) : 'Cached'})
@@ -336,7 +336,7 @@ export function AnnouncementsPage() {
       </div>
 
       {!canPublish && (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+        <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 md:flex">
           <Eye className="h-4 w-4 text-slate-600" />
           View-only bulletin access: Focal Persons and Scholars/Students receive and review announcements published by Administrators and Registrars.
         </div>

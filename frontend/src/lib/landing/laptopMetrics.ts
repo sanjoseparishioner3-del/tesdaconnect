@@ -79,21 +79,21 @@ export const HERO_PRESETS: Record<HeroPresetKey, PresetDashboardSpec> = {
   },
   sync: {
     key: 'sync',
-    label: 'Offline Sync Engine',
-    shortLabel: 'Offline PWA',
-    institutionTag: 'Dexie.js + Workbox Engine',
-    headline: 'Conflict-Safe Offline Sync',
-    subline: 'View schedules, announcements, docs, and queue MIS 03-01 submissions without internet.',
+    label: 'Offline Mode',
+    shortLabel: 'Offline',
+    institutionTag: 'Offline mode',
+    headline: 'Keeps working without signal',
+    subline: 'Read schedules and announcements, and save forms and files with no internet. They send by themselves later.',
     kpis: [
-      { label: 'Offline Unlock', value: 'PBKDF2', delta: 'Device-bound, time-limited' },
-      { label: 'App Shell', value: 'PWA', delta: 'Installable & cached' },
-      { label: 'Sync Queue', value: 'Retry-safe', delta: 'No duplicate uploads' },
+      { label: 'Sign in', value: 'Once online', delta: 'Then works offline' },
+      { label: 'App', value: 'Installable', delta: 'Add to home screen' },
+      { label: 'Uploads', value: 'Retry-safe', delta: 'No duplicate files' },
       { label: 'Documents', value: 'On device', delta: 'View & download offline' },
     ],
     workflows: [
-      { title: 'Offline Login & Registration Intake', meta: 'Queued cleanly in IndexedDB outbox', status: 'Buffered' },
-      { title: 'Offline Schedule & Announcement Cache', meta: 'Readable anytime in field centers', status: 'Cached' },
-      { title: 'Foreground Reconnect Synchronization', meta: 'Manual conflict check on version drift', status: 'Guarded' },
+      { title: 'Offline sign-in and registration', meta: 'Saved on the device until you reconnect', status: 'Saved' },
+      { title: 'Saved schedules and announcements', meta: 'Readable anytime in the field', status: 'Cached' },
+      { title: 'Automatic sync when online', meta: 'Files and forms are sent for you', status: 'Auto' },
     ],
   },
 };
@@ -192,7 +192,9 @@ export function detectLandingCapabilities(): LandingCapabilityCheck {
   }
 
   const cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 4;
-  const lowPerformanceDevice = cores <= 1;
+  const memoryGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  // Very weak phones (<= 2 cores or <= 2 GB) get the light 2D hero instead of WebGL.
+  const lowPerformanceDevice = cores <= 2 || (typeof memoryGb === 'number' && memoryGb <= 2);
 
   return {
     prefersReducedMotion,

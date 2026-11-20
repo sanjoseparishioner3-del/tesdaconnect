@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { ExpandedDashboardPreview } from '@/components/landing/ExpandedDashboardPreview';
 import type { LaptopScrollState } from '@/components/landing/LaptopCanvasScene';
 import { LightweightLaptopMockup } from '@/components/landing/LightweightLaptopMockup';
+import { MobileLaptopStage } from '@/components/landing/MobileLaptopStage';
 import { LazyLaptopCanvasScene } from '@/components/landing/lazyLaptopScene';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,6 +85,8 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
 
   const use3DDesktopMorph =
     isDesktopViewport && !capabilities.useSimplifiedMorph && !webglRuntimeError;
+  // Phones and tablets get the same real 3D laptop, driven by a lighter sticky-scroll choreography.
+  const useMobile3D = !isDesktopViewport && !capabilities.useSimplifiedMorph && !webglRuntimeError;
 
   // Sync capability & viewport listeners cleanly
   React.useEffect(() => {
@@ -132,6 +135,10 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
         const cards = modsEl ? gsap.utils.toArray<HTMLElement>('.morph-module-card', modsEl) : [];
 
         if (!heroEl || !dashEl || !modsEl) return undefined;
+
+        // Intro: the laptop starts closed and opens its lid (GSAP) before the scroll story begins.
+        scrollStateRef.current.lid = 0;
+        gsap.to(scrollStateRef.current, { lid: 1, duration: 1.8, delay: 0.35, ease: 'power3.inOut' });
 
         gsap.set(heroEl, { opacity: 1, x: 0, pointerEvents: 'auto' });
         gsap.set(dashEl, { opacity: 0, scale: 0.72, y: 12, pointerEvents: 'none' });
@@ -275,19 +282,18 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
   const heroCopyContent = (
     <div className="space-y-5">
       <Badge className="border border-emerald-600/25 bg-emerald-50 text-emerald-800 hover:bg-emerald-50">
-        Offline-First Progressive Web App · Supabase + PostgreSQL RLS
+        Installable app · Works offline
       </Badge>
 
       <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-[3.15rem] lg:leading-[1.08]">
-        Modernized TESDA Training Operations for{' '}
+        TESDA training operations for{' '}
         <span className="text-emerald-600">BST</span> &amp;{' '}
-        <span className="text-emerald-700">MIF</span>
+        <span className="text-emerald-700">MIF</span>, simple and always with you.
       </h1>
 
       <p className="max-w-xl text-base leading-relaxed text-slate-600 sm:text-[1.05rem]">
-        Scroll to morph seamlessly from a studio 3D laptop into the live TCTESDAConnect workspace —
-        unifying MIS 03-01 registration intake, 8-document verification, post-confirmation ULI control,
-        schedules, announcements, and offline field sync.
+        Register scholars, collect and verify requirements, publish schedules and announcements, and keep
+        working even without internet. One system for Balli School of Technology and Mamburao Integrated Farm.
       </p>
 
       {/* Preset Focus Buttons */}
@@ -329,7 +335,7 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
           onClick={() => handleScrollToStage(use3DDesktopMorph ? 2 : 3)}
           className="border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
         >
-          Explore Workflow Morph <ArrowDown className="h-4 w-4 text-emerald-600" />
+          See how it works <ArrowDown className="h-4 w-4 text-emerald-600" />
         </Button>
       </div>
 
@@ -340,7 +346,7 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
           <p className="text-slate-500">Filled &amp; blank PDFs</p>
         </div>
         <div>
-          <p className="font-bold text-slate-900">8 Required Docs</p>
+          <p className="font-bold text-slate-900">Document checklist</p>
           <p className="text-slate-500">View &amp; download offline</p>
         </div>
         <div>
@@ -482,8 +488,22 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
     );
   }
 
+  if (useMobile3D) {
+    return (
+      <>
+        <MobileLaptopStage
+          activePreset={activePreset}
+          onSelectPreset={onSelectPreset}
+          onWebglError={() => setWebglRuntimeError(true)}
+        />
+        <ModulesSection />
+      </>
+    );
+  }
+
   // Mobile, Low-Performance, WebGL-Fallback, and Reduced-Motion Accessible Mode
   return (
+    <>
     <section
       id="morph-showcase"
       ref={pinStageRef}
@@ -505,61 +525,71 @@ export function LaptopMorphShowcase({ activePreset, onSelectPreset }: LaptopMorp
           </div>
         </div>
 
-        {/* Expanded Dashboard Presentation (Visible & Accessible without Scroll Pinning) */}
-        <div className="space-y-4">
+        <div className="hidden space-y-4 md:block">
           <div className="text-center">
-            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
-              Unified Institutional Dashboard
-            </p>
-            <h2 className="mt-1 text-2xl font-extrabold text-slate-900">
-              Complete Operational Visibility Across BST &amp; MIF
-            </h2>
+            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase">Unified dashboard</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-slate-900">One view across BST &amp; MIF</h2>
           </div>
           <ExpandedDashboardPreview activePreset={activePreset} onSelectPreset={onSelectPreset} />
         </div>
+      </div>
+    </section>
+    <ModulesSection />
+    </>
+  );
+}
 
-        {/* Separated Core Modules Reveal Grid */}
-        <div id="morph-modules-section" className="simplified-modules-grid space-y-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Core Workflow Modules
-              </span>
-              <h2 className="mt-2 text-2xl font-extrabold text-slate-900">
-                Trainee Intake, Records, Batches, Schedules, Announcements &amp; Reports
-              </h2>
-            </div>
-          </div>
+/** Compact, tap-friendly overview of the six workflow modules (used on phones and as fallback). */
+export function ModulesSection() {
+  const rootRef = React.useRef<HTMLElement | null>(null);
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {MORPH_MODULE_CARDS.map((mod) => {
-              const Icon = MODULE_ICONS[mod.id] ?? Users;
-              return (
-                <article
-                  key={mod.id}
-                  className="simplified-module-card flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/70 p-5 shadow-xs"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-2xs ring-1 ring-emerald-600/20">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-slate-200">
-                        {mod.code}
-                      </span>
-                    </div>
-                    <h3 className="mt-3 text-base font-bold text-slate-900">{mod.title}</h3>
-                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{mod.description}</p>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-200/80 pt-3 text-[11px]">
-                    <span className="font-medium text-slate-500">{mod.roleTag}</span>
-                    <span className="font-semibold text-emerald-700">{mod.accentLabel}</span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!root || !ensureScrollTriggerRegistered()) return undefined;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return undefined;
+    const ctx = gsap.context(() => {
+      gsap.set('.msc-card', { opacity: 0, y: 26 });
+      ScrollTrigger.batch('.msc-card', {
+        start: 'top 92%',
+        once: true,
+        onEnter: (els) => gsap.to(els, { opacity: 1, y: 0, duration: 0.55, stagger: 0.08, ease: 'power3.out', overwrite: true }),
+      });
+    }, root);
+    return () => ctx.revert();
+  }, []);
+
+  return (
+    <section
+      id="morph-modules-section"
+      ref={rootRef}
+      className="scroll-mt-16 bg-white px-4 py-12 sm:px-6 sm:py-16"
+    >
+      <div className="mx-auto max-w-7xl">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-600/15">
+          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+          Everything in one place
+        </span>
+        <h2 className="mt-3 max-w-2xl text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+          Six tools that cover the whole training cycle
+        </h2>
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+          {MORPH_MODULE_CARDS.map((mod) => {
+            const Icon = MODULE_ICONS[mod.id] ?? Users;
+            return (
+              <article
+                key={mod.id}
+                className="msc-card flex flex-col rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-5"
+              >
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15">
+                  <Icon className="h-4.5 w-4.5" aria-hidden="true" />
+                </span>
+                <h3 className="mt-3 text-sm font-bold text-slate-900 sm:text-base">{mod.title}</h3>
+                <p className="mt-1 line-clamp-4 text-[11.5px] leading-relaxed text-slate-600 sm:text-xs">{mod.description}</p>
+                <p className="mt-auto pt-3 text-[11px] font-semibold text-emerald-700">{mod.accentLabel}</p>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

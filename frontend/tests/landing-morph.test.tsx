@@ -51,14 +51,14 @@ describe('Scroll-Driven 3D Laptop Morph Landing Experience', () => {
     expect(rootWrapper?.className).not.toContain('bg-slate-950');
 
     expect(
-      screen.getByRole('heading', { name: /Modernized TESDA Training Operations/i }),
+      screen.getByRole('heading', { name: /TESDA training operations for/i }),
     ).toBeInTheDocument();
 
     // Verify top institutional nav links & Login CTA
-    expect(screen.getByRole('link', { name: /Workflow Morph/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Supported Institutions/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Technology/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /About/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Features$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Campuses$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Offline$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Who it is for/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Staff & Scholar Login/i })).toBeInTheDocument();
 
     // Verify preset buttons switch live dashboard content cleanly
@@ -75,13 +75,13 @@ describe('Scroll-Driven 3D Laptop Morph Landing Experience', () => {
 
     // Verify Stage 5 sections & 8 institutional gallery images remain intact
     expect(
-      screen.getByRole('heading', { name: /Two Occidental Mindoro Campuses/i }),
+      screen.getByRole('heading', { name: /Two campuses in Occidental Mindoro/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /Built for Offline Reliability/i }),
+      screen.getByRole('heading', { name: /Reliable even when the internet is not/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /Designed Around Philippine TVET Operational Realities/i }),
+      screen.getByRole('heading', { name: /One workspace for everyone in the training cycle/i }),
     ).toBeInTheDocument();
     expect(container.querySelectorAll('img[src*="/images/landing/"]').length).toBe(8);
   }, 15000);
