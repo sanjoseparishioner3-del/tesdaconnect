@@ -5,13 +5,12 @@ import interactionPlugin from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, CalendarDays, CloudOff, Eye, Plus } from 'lucide-react';
+import { CalendarDays, CloudOff, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { offlineDb } from '@/lib/db/dexie';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -36,23 +35,6 @@ interface LiveScheduleRow {
   institutions: { code: string } | Array<{ code: string }> | null;
 }
 
-interface CourseOption {
-  id: string;
-  institution_id: string;
-  code: string;
-  name: string;
-  training_hours: number | null;
-}
-
-interface ConflictWarning {
-  conflicting_batch_id: string;
-  conflicting_code: string;
-  conflicting_name: string;
-  starts_at: string;
-  ends_at: string;
-  venue: string;
-}
-
 export function TrainingSchedulesPage() {
   const profile = useAuthStore((s) => s.profile);
   const offlineOptIn = useAuthStore((s) => s.offlineOptIn);
@@ -66,35 +48,6 @@ export function TrainingSchedulesPage() {
 
   const [tab, setTab] = React.useState<'calendar' | 'batches' | 'compliance'>('calendar');
   const [selectedInstitutionFilter, setSelectedInstitutionFilter] = React.useState('all');
-
-  const [courseId, setCourseId] = React.useState('');
-  const [batchCode, setBatchCode] = React.useState('');
-  const [batchName, setBatchName] = React.useState('');
-  const [capacity, setCapacity] = React.useState('25');
-  const [scheduledHours, setScheduledHours] = React.useState('268');
-  const [venue, setVenue] = React.useState('');
-  const [startsAt, setStartsAt] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [endsAt, setEndsAt] = React.useState(() => new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10));
-  const [status, setStatus] = React.useState<'upcoming' | 'in_training' | 'completed' | 'cancelled'>('upcoming');
-  const [conflictWarnings, setConflictWarnings] = React.useState<ConflictWarning[]>([]);
-
-  const coursesQuery = useQuery<CourseOption[]>({
-    queryKey: ['schedule-courses', userId],
-    enabled: isSupabaseConfigured && isOnline && Boolean(userId) && canManageBatches,
-    queryFn: async () => {
-      const client = getSupabaseClient();
-      if (!client) return [];
-      const { data, error } = await client
-        .from('courses')
-        .select('id, institution_id, code, name, training_hours')
-        .is('archived_at', null)
-        .eq('is_active', true)
-        .order('code', { ascending: true })
-        .returns<CourseOption[]>();
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-  });
 
   const liveSchedulesQuery = useQuery({
     queryKey: ['live-training-batches', userId],
@@ -177,57 +130,6 @@ export function TrainingSchedulesPage() {
     [userId],
     [],
   );
-
-  const saveBatchMutation = useMutation({
-    mutationFn: async () => {
-      const client = getSupabaseClient();
-      if (!client || !profile) throw new Error('Authenticated session required.');
-      const chosenCourse = (coursesQuery.data ?? []).find((c) => c.id === courseId) ?? coursesQuery.data?.[0];
-      if (!chosenCourse) throw new Error('Select an active course qualification first.');
-      if (batchCode.trim().length < 2 || batchName.trim().length < 3) {
-        throw new Error('Provide a batch code and name.');
-      }
-
-      if (venue.trim() && startsAt && endsAt) {
-        const overlapRes = (await client.rpc('detect_batch_schedule_conflicts', {
-          p_institution_id: chosenCourse.institution_id,
-          p_venue: venue.trim(),
-          p_starts_at: startsAt,
-          p_ends_at: endsAt,
-          p_exclude_batch_id: null,
-        })) as { data: ConflictWarning[] | null };
-        const overlaps = overlapRes.data ?? [];
-        setConflictWarnings(overlaps);
-        const firstOverlap = overlaps[0];
-        if (firstOverlap) {
-          toast.warning(`Venue overlap warning: ${firstOverlap.conflicting_code} uses ${venue.trim()} in the same dates.`);
-        }
-      }
-
-      const capNum = Math.min(5000, Math.max(1, Number.parseInt(capacity, 10) || 25));
-      const hoursNum = Number.parseInt(scheduledHours, 10) || null;
-      const { error } = await client.from('training_batches').insert({
-        institution_id: chosenCourse.institution_id,
-        course_id: chosenCourse.id,
-        code: batchCode.trim().toUpperCase(),
-        name: batchName.trim(),
-        capacity: capNum,
-        scheduled_hours: hoursNum,
-        venue: venue.trim() || null,
-        starts_at: startsAt || null,
-        ends_at: endsAt || null,
-        status,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success('Training batch saved cleanly.');
-      setBatchCode('');
-      setBatchName('');
-      await queryClient.invalidateQueries({ queryKey: ['live-training-batches'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
   const updateBatchStatusMutation = useMutation({
     mutationFn: async ({ batchId, nextStatus }: { batchId: string; nextStatus: LiveScheduleRow['status'] }) => {
@@ -375,21 +277,7 @@ export function TrainingSchedulesPage() {
       {!canManageBatches && (
         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
           <Eye className="h-4 w-4 text-slate-600" />
-          Read-only Schedules View: Only Administrators may create or edit training schedules. Registrar, Focal Person, and Scholars/Students view schedules and announcements here.
-        </div>
-      )}
-
-      {conflictWarnings.length > 0 && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-          <div>
-            <p className="font-semibold">Schedule Conflict Warning Detected</p>
-            {conflictWarnings.map((w) => (
-              <p key={w.conflicting_batch_id}>
-                Overlaps {w.conflicting_code} ({w.conflicting_name}) at {w.venue} ({w.starts_at} -&gt; {w.ends_at})
-              </p>
-            ))}
-          </div>
+          Read-only Schedules View: The Registrar creates batches and Administrators manage them. Focal Persons, Trainers and Scholars view schedules and announcements here.
         </div>
       )}
 
@@ -419,80 +307,10 @@ export function TrainingSchedulesPage() {
 
       {tab === 'batches' && (
         <div className="space-y-4">
-          {canManageBatches && isSupabaseConfigured && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Plus className="h-4 w-4 text-teal-700" /> Create / Schedule Training Batch
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-4">
-                <div className="space-y-1">
-                  <Label htmlFor="batch_course">Course</Label>
-                  <select
-                    id="batch_course"
-                    value={courseId || coursesQuery.data?.[0]?.id || ''}
-                    onChange={(e) => setCourseId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm"
-                  >
-                    {(coursesQuery.data ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.code} — {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_code">Batch Code</Label>
-                  <Input id="batch_code" value={batchCode} onChange={(e) => setBatchCode(e.target.value)} placeholder="BATCH-2026-01" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_name">Batch Name</Label>
-                  <Input id="batch_name" value={batchName} onChange={(e) => setBatchName(e.target.value)} placeholder="SMAW NC II Morning Cohort" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_venue">Venue / Workshop</Label>
-                  <Input id="batch_venue" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Welding Workshop B" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_starts">Starts At</Label>
-                  <Input id="batch_starts" type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_ends">Ends At</Label>
-                  <Input id="batch_ends" type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="batch_cap">Capacity</Label>
-                    <Input id="batch_cap" type="number" min={1} max={5000} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="batch_hours">Hours</Label>
-                    <Input id="batch_hours" type="number" min={0} value={scheduledHours} onChange={(e) => setScheduledHours(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="batch_status">Canonical Status</Label>
-                  <select
-                    id="batch_status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as typeof status)}
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm"
-                  >
-                    <option value="upcoming">upcoming</option>
-                    <option value="in_training">in_training</option>
-                    <option value="completed">completed</option>
-                    <option value="cancelled">cancelled</option>
-                  </select>
-                </div>
-                <div className="md:col-span-4">
-                  <Button type="button" size="sm" variant="secondary" disabled={saveBatchMutation.isPending || !isOnline} onClick={() => saveBatchMutation.mutate()}>
-                    Save Training Batch
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {canManageBatches && (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Batches are now created by the Registrar in <Link to="/batches" className="font-semibold text-teal-700 underline">Batch Management</Link>, where each batch gets its school year, number and code.
+            </p>
           )}
 
           <Card>

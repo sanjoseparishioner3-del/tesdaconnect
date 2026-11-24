@@ -47,7 +47,7 @@ export function TesdaOverviewPage() {
   const tiles = [
     { label: 'Schools', value: totals.campuses, Icon: School },
     { label: 'Batches', value: totals.batches, Icon: GraduationCap },
-    { label: 'Started', value: totals.started, Icon: CalendarDays },
+    { label: 'Ongoing', value: totals.started, Icon: CalendarDays },
     { label: 'Enrolled scholars', value: totals.enrolled, Icon: Users },
   ];
 
@@ -156,7 +156,7 @@ export function TesdaOverviewPage() {
               <dl className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <dt className="text-slate-500">Date started</dt>
-                  <dd className="font-medium text-slate-900">{formatPhDate(row.starts_at)}</dd>
+                  <dd className="font-medium text-slate-900">{formatPhDate(progress === 'not_started' ? null : row.starts_at)}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Training ends</dt>

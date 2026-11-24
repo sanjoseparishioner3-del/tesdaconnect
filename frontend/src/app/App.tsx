@@ -54,6 +54,7 @@ const TrainingSchedulesPage = lazyPage(() => import('@/features/schedules/Traini
 const OfflineSyncPage = lazyPage(() => import('@/features/sync/OfflineSyncPage'), 'OfflineSyncPage');
 const AdminUsersPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'AdminUsersPage');
 const TesdaOverviewPage = lazyPage(() => import('@/features/tesda/TesdaOverviewPage'), 'TesdaOverviewPage');
+const BatchManagementPage = lazyPage(() => import('@/features/batches/BatchManagementPage'), 'BatchManagementPage');
 const InstitutionsAdminPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'InstitutionsAdminPage');
 const SecurityAuditLogsPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'SecurityAuditLogsPage');
 const EnrollmentReviewPage = lazyPage(() => import('@/features/records/EnrollmentAndRecordsPages'), 'EnrollmentReviewPage');
@@ -338,6 +339,7 @@ export function App() {
                 </Route>
 
                 <Route element={<RoleRoute allowedRoles={['system_administrator', 'institutional_administrator', 'registrar']} />}>
+                  <Route path="/batches" element={<BatchManagementPage />} />
                   <Route path="/enrollments" element={<EnrollmentReviewPage />} />
                   <Route path="/trainees" element={<TraineeRecordsPage />} />
                 </Route>

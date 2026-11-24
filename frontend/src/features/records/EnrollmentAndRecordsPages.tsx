@@ -19,6 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
+import { AppDialog } from '@/components/ui/dialog';
+import { FULL_BATCHES_RETURN_MESSAGE, parseConfirmError } from '@/features/batches/batchRules';
 import { QuotaStatusPanel } from '@/features/records/QuotaStatusPanel';
 import { isConfirmBlocked } from '@/features/records/quotaStatus';
 import { useCampusQuotas } from '@/features/records/useCampusQuotas';
@@ -52,6 +54,8 @@ export function EnrollmentReviewPage() {
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'submitted' | 'verified' | 'returned' | 'confirmed'>('all');
   const [returnReason, setReturnReason] = React.useState('');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [batchPrompt, setBatchPrompt] = React.useState<{ row: EnrollmentRow; text: string } | null>(null);
+  const [fullPrompt, setFullPrompt] = React.useState<{ row: EnrollmentRow; text: string } | null>(null);
   const { statuses: quotaStatuses, refetch: refetchQuotas } = useCampusQuotas();
   const campusNames = React.useMemo(() => {
     const map: Record<string, string> = {};
@@ -120,19 +124,34 @@ export function EnrollmentReviewPage() {
     await loadApplications();
   }
 
-  async function handleConfirm(row: EnrollmentRow) {
+  async function handleConfirm(row: EnrollmentRow, acceptNextBatch = false) {
     const client = getSupabaseClient();
     if (!client) return;
-    const rpcResponse = (await client.rpc('confirm_enrollment_application', {
+    type ConfirmResult = { data: (EnrollmentRow & { training_batch_id?: string | null }) | null; error: { message: string } | null };
+    let rpcResponse = (await client.rpc('confirm_enrollment_application', {
       p_application_id: row.id,
-    })) as { data: EnrollmentRow | null; error: { message: string } | null };
+      p_accept_next_batch: acceptNextBatch,
+    })) as ConfirmResult;
+    // Until the batch-management database update is applied, the older one-argument function is still in place.
+    if (rpcResponse.error && /could not find the function/i.test(rpcResponse.error.message)) {
+      rpcResponse = (await client.rpc('confirm_enrollment_application', { p_application_id: row.id })) as ConfirmResult;
+    }
 
     if (rpcResponse.error) {
-      toast.error(rpcResponse.error.message);
+      const parsed = parseConfirmError(rpcResponse.error.message);
+      if (parsed.kind === 'next_batch') {
+        setBatchPrompt({ row, text: parsed.text });
+      } else if (parsed.kind === 'all_full') {
+        setFullPrompt({ row, text: parsed.text });
+      } else {
+        toast.error(parsed.text);
+      }
       refetchQuotas();
       return;
     }
-    toast.success(`Confirmed! Assigned Scholar ID: ${rpcResponse.data?.scholar_id ?? 'Generated'}`);
+    toast.success(
+      `Confirmed! Scholar ID: ${rpcResponse.data?.scholar_id ?? 'Generated'}${rpcResponse.data?.training_batch_id ? '. Placed in a batch.' : ''}`,
+    );
     await loadApplications();
     refetchQuotas();
   }
@@ -196,6 +215,59 @@ export function EnrollmentReviewPage() {
           </Button>
         ))}
       </div>
+
+      <AppDialog
+        open={Boolean(batchPrompt)}
+        onOpenChange={(open) => !open && setBatchPrompt(null)}
+        title="Continue to the next batch?"
+        description={batchPrompt?.text}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setBatchPrompt(null)}>
+              No, stop here
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const target = batchPrompt?.row;
+                setBatchPrompt(null);
+                if (target) void handleConfirm(target, true);
+              }}
+            >
+              Yes, continue
+            </Button>
+          </>
+        }
+      />
+
+      <AppDialog
+        open={Boolean(fullPrompt)}
+        onOpenChange={(open) => !open && setFullPrompt(null)}
+        title="All batches are full"
+        description={fullPrompt?.text}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setFullPrompt(null)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const target = fullPrompt?.row;
+                setFullPrompt(null);
+                if (target) {
+                  setSelectedId(target.id);
+                  setReturnReason(FULL_BATCHES_RETURN_MESSAGE);
+                }
+              }}
+            >
+              Return with a message
+            </Button>
+          </>
+        }
+      />
 
       <QuotaStatusPanel statuses={quotaStatuses} campusNames={campusNames} courseNames={courseNamesQuery.data ?? {}} />
 

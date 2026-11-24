@@ -156,6 +156,13 @@ export const FLAT_SIDEBAR_ITEMS: NavItemConfig[] = [
     offlineCapable: true,
   },
   {
+    label: 'Batch Management',
+    to: '/batches',
+    section: 'operations',
+    roles: ['registrar', 'institutional_administrator', 'system_administrator'],
+    icon: 'FolderKanban',
+  },
+  {
     label: 'Enrollment Review',
     to: '/enrollments',
     section: 'records',
@@ -216,6 +223,7 @@ export const ROUTE_ALLOWED_ROLES: Record<string, readonly AppRole[]> = {
   '/settings/password': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar', 'tesda_viewer'],
   '/intake': ['system_administrator', 'institutional_administrator', 'registrar', 'applicant', 'scholar'],
   '/schedules': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
+  '/batches': ['system_administrator', 'institutional_administrator', 'registrar'],
   '/enrollments': ['system_administrator', 'institutional_administrator', 'registrar'],
   '/trainees': ['system_administrator', 'institutional_administrator', 'registrar'],
   '/competency': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer'],

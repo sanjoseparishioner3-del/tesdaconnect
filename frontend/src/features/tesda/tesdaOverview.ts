@@ -25,8 +25,8 @@ export function batchProgress(row: Pick<TesdaBatchRow, 'batch_status' | 'starts_
 }
 
 export const PROGRESS_LABEL: Record<TesdaProgress, string> = {
-  not_started: 'Not started yet',
-  started: 'Started',
+  not_started: 'Pending',
+  started: 'Ongoing',
   completed: 'Completed',
   cancelled: 'Cancelled',
 };
@@ -52,7 +52,7 @@ export function fillPercent(enrolled: number, capacity: number): number {
 }
 
 export function formatPhDate(value: string | null): string {
-  if (!value) return 'Not set';
+  if (!value) return 'N/A';
   const d = new Date(`${value}T00:00:00`);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
