@@ -49,6 +49,7 @@ import { triggerForegroundSync } from '@/lib/sync/supabaseTransport';
 import { asText, formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
+import { EnrollmentWindowBanner } from './EnrollmentWindowBanner';
 
 const STEPS = [
   '1-2. Name & Address',
@@ -556,6 +557,8 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
           </div>
         </div>
       )}
+
+      {!isStaff && <EnrollmentWindowBanner institutionId={watchedValues.institution_id || null} courseId={watchedValues.course_id || null} isOnline={isOnline} />}
 
       {/* Quick MIS 03-01 View / Print / PDF Toolbar */}
       <Card className="border-slate-200 bg-slate-50/80">
