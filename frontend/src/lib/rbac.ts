@@ -28,7 +28,8 @@ export interface NavItemConfig {
     | 'ShieldAlert'
     | 'GraduationCap'
     | 'UserCog'
-    | 'HelpCircle';
+    | 'HelpCircle'
+    | 'BarChart3';
   offlineCapable?: boolean;
 }
 
@@ -53,6 +54,13 @@ export const FLAT_SIDEBAR_ITEMS: NavItemConfig[] = [
     roles: ['applicant', 'scholar'],
     icon: 'GraduationCap',
     offlineCapable: true,
+  },
+  {
+    label: 'TESDA Overview',
+    to: '/tesda-overview',
+    section: 'overview',
+    roles: ['tesda_viewer', 'system_administrator'],
+    icon: 'BarChart3',
   },
   {
     label: 'Offline Sync Center',
@@ -202,9 +210,10 @@ export const STAFF_DASHBOARD_ROLES: readonly AppRole[] = [
 export const ROUTE_ALLOWED_ROLES: Record<string, readonly AppRole[]> = {
   '/dashboard': STAFF_DASHBOARD_ROLES,
   '/sync': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
+  '/tesda-overview': ['tesda_viewer', 'system_administrator'],
   '/user-guide': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
   '/announcements': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
-  '/settings/password': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
+  '/settings/password': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar', 'tesda_viewer'],
   '/intake': ['system_administrator', 'institutional_administrator', 'registrar', 'applicant', 'scholar'],
   '/schedules': ['system_administrator', 'institutional_administrator', 'registrar', 'focal_person', 'trainer', 'applicant', 'scholar'],
   '/enrollments': ['system_administrator', 'institutional_administrator', 'registrar'],
@@ -230,6 +239,8 @@ export function resolveRoleDefaultRoute(role: AppRole): string {
       return '/competency';
     case 'trainer':
       return '/schedules';
+    case 'tesda_viewer':
+      return '/tesda-overview';
     case 'scholar':
     case 'applicant':
     default:

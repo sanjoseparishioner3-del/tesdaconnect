@@ -72,6 +72,7 @@ export function CompetencyAndAttendancePage() {
   const [activeTab, setActiveTab] = React.useState<'competency' | 'setup' | 'workflow'>('competency');
   const [chartFilter, setChartFilter] = React.useState<'all' | 'progress' | 'achievement'>('all');
   const [selectedBatchId, setSelectedBatchId] = React.useState('');
+  const [selectedScholarKey, setSelectedScholarKey] = React.useState('');
 
   const [unitNumber, setUnitNumber] = React.useState('1');
   const [unitName, setUnitName] = React.useState('');
@@ -476,7 +477,12 @@ export function CompetencyAndAttendancePage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const scholars = scholarsQuery.data ?? [];
+  const allScholars = React.useMemo(() => scholarsQuery.data ?? [], [scholarsQuery.data]);
+  // Class record: pick one scholar ID to see only that scholar (blank = the whole class).
+  const scholars = React.useMemo(
+    () => (selectedScholarKey ? allScholars.filter((s) => s.id === selectedScholarKey) : allScholars),
+    [allScholars, selectedScholarKey],
+  );
   const scholarsPagination = usePagination({
     totalRecords: scholars.length,
     initialPageSize: 10,
@@ -536,12 +542,31 @@ export function CompetencyAndAttendancePage() {
             <select
               id="batch_select"
               value={activeBatchId}
-              onChange={(e) => setSelectedBatchId(e.target.value)}
+              onChange={(e) => {
+                setSelectedBatchId(e.target.value);
+                setSelectedScholarKey('');
+              }}
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
             >
               {batchesQuery.data.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.code} — {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[220px] max-w-sm flex-1 space-y-1">
+            <Label htmlFor="scholar_select">Class record (scholar ID)</Label>
+            <select
+              id="scholar_select"
+              value={allScholars.some((s) => s.id === selectedScholarKey) ? selectedScholarKey : ''}
+              onChange={(e) => setSelectedScholarKey(e.target.value)}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="">Whole class ({allScholars.length} enrolled)</option>
+              {allScholars.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.scholar_id ?? s.reference_no} - {s.learner_name}
                 </option>
               ))}
             </select>

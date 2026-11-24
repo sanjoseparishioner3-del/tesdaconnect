@@ -6,6 +6,7 @@ export const APP_ROLES = [
   'trainer',
   'applicant',
   'scholar',
+  'tesda_viewer',
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
@@ -41,6 +42,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   trainer: 'Trainer',
   applicant: 'Applicant',
   scholar: 'Scholar',
+  tesda_viewer: 'TESDA Viewer',
 };
 
 export function normalizeAppRole(rawRole: string | null | undefined): AppRole {

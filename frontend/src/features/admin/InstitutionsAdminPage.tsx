@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CalendarRange, CloudOff, Lock, Pencil, Plus, SlidersHorizontal, Trash2, Unlock } from 'lucide-react';
+import { Building2, CalendarRange, CloudOff, Lock, Pencil, Plus, School, SlidersHorizontal, Trash2, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
+import { validateCampusForm } from './campuses';
 import {
   friendlyPeriodError,
   getPeriodState,
@@ -27,6 +28,8 @@ interface InstitutionRow {
   code: string;
   name: string;
   address: string | null;
+  contact_email: string | null;
+  contact_number: string | null;
   is_active: boolean;
 }
 
@@ -95,6 +98,11 @@ export function InstitutionsAdminPage() {
   const [courseLimitsFor, setCourseLimitsFor] = React.useState<PeriodRow | null>(null);
   const [courseDraft, setCourseDraft] = React.useState<Record<string, string>>({});
   const [deleting, setDeleting] = React.useState<PeriodRow | null>(null);
+  const [campusOpen, setCampusOpen] = React.useState(false);
+  const [editingCampus, setEditingCampus] = React.useState<InstitutionRow | null>(null);
+  const [campusForm, setCampusForm] = React.useState({ code: '', name: '', address: '', email: '', phone: '' });
+  const [campusError, setCampusError] = React.useState<string | null>(null);
+  const isSysAdmin = profile?.role === 'system_administrator';
 
   const instQuery = useQuery<InstitutionRow[]>({
     queryKey: ['admin-institutions'],
@@ -104,7 +112,7 @@ export function InstitutionsAdminPage() {
       if (!client) return [];
       const { data, error } = await client
         .from('institutions')
-        .select('id, code, name, address, is_active')
+        .select('id, code, name, address, contact_email, contact_number, is_active')
         .order('code', { ascending: true })
         .returns<InstitutionRow[]>();
       if (error) throw new Error(error.message);
@@ -333,6 +341,58 @@ export function InstitutionsAdminPage() {
     onError: (err: Error) => toast.error(friendlyPeriodError(err.message)),
   });
 
+  const openAddCampus = () => {
+    setEditingCampus(null);
+    setCampusForm({ code: '', name: '', address: '', email: '', phone: '' });
+    setCampusError(null);
+    setCampusOpen(true);
+  };
+
+  const openEditCampus = (inst: InstitutionRow) => {
+    setEditingCampus(inst);
+    setCampusForm({ code: inst.code, name: inst.name, address: inst.address ?? '', email: inst.contact_email ?? '', phone: inst.contact_number ?? '' });
+    setCampusError(null);
+    setCampusOpen(true);
+  };
+
+  const campusMutation = useMutation({
+    mutationFn: async (override?: { inst: InstitutionRow; isActive: boolean }) => {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Sign in to continue.');
+      if (override) {
+        const { error } = await client.from('institutions').update({ is_active: override.isActive }).eq('id', override.inst.id);
+        if (error) throw new Error(error.message);
+        return override.isActive ? 'Campus is active again.' : 'Campus deactivated.';
+      }
+      const problem = validateCampusForm(campusForm, { existingCodes: institutions.map((i) => i.code), editing: Boolean(editingCampus) });
+      if (problem) throw new Error(problem);
+      const values = {
+        name: campusForm.name.trim(),
+        address: campusForm.address.trim() || null,
+        contact_email: campusForm.email.trim() || null,
+        contact_number: campusForm.phone.trim() || null,
+      };
+      if (editingCampus) {
+        const { error } = await client.from('institutions').update(values).eq('id', editingCampus.id);
+        if (error) throw new Error(error.message);
+        return 'Campus saved.';
+      }
+      const { error } = await client.from('institutions').insert({ ...values, code: campusForm.code.trim().toUpperCase(), is_active: true });
+      if (error) throw new Error(error.message);
+      return 'Campus added. Assign its staff in Users & Role Access.';
+    },
+    onSuccess: async (message) => {
+      toast.success(message);
+      setCampusOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['admin-institutions'] });
+    },
+    onError: (err: Error) => {
+      const message = /duplicate key|institutions_code_key/i.test(err.message) ? 'A campus with that code already exists.' : friendlyPeriodError(err.message);
+      setCampusError(message);
+      if (!campusOpen) toast.error(message);
+    },
+  });
+
   const loadFailed = instQuery.isError || periodsQuery.isError;
   const busy = saveMutation.isPending || lockMutation.isPending || deleteMutation.isPending || courseLimitsMutation.isPending;
 
@@ -346,13 +406,20 @@ export function InstitutionsAdminPage() {
             <Building2 className="h-6 w-6 shrink-0 text-teal-700" /> Campuses &amp; Enrollment Periods
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Choose when each campus accepts new registrations and how many scholars it can take. Scholars cannot submit outside an open period or after the slots are full.
+            Choose when each campus accepts new registrations and how many scholars it can take. Scholars cannot submit outside an open period, and the registrar cannot confirm more scholars than the slots.
           </p>
         </div>
         {isSupabaseConfigured && (
-          <Button type="button" size="lg" variant="secondary" className="w-full sm:w-auto" onClick={openCreate} disabled={!isOnline || institutions.length === 0}>
-            <Plus className="h-4 w-4" /> Add enrollment period
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {isSysAdmin && (
+              <Button type="button" size="lg" variant="outline" className="w-full sm:w-auto" onClick={openAddCampus} disabled={!isOnline}>
+                <School className="h-4 w-4" /> Add campus
+              </Button>
+            )}
+            <Button type="button" size="lg" variant="secondary" className="w-full sm:w-auto" onClick={openCreate} disabled={!isOnline || institutions.length === 0}>
+              <Plus className="h-4 w-4" /> Add enrollment period
+            </Button>
+          </div>
         )}
       </div>
 
@@ -387,14 +454,27 @@ export function InstitutionsAdminPage() {
                   <h2 className="truncate text-base font-semibold text-slate-900">{inst.name}</h2>
                   <p className="truncate text-xs text-slate-500">{inst.address ?? 'Occidental Mindoro'}</p>
                 </div>
-                <Badge variant={inst.is_active ? 'success' : 'secondary'}>{inst.code}</Badge>
+                <div className="flex items-center gap-1.5">
+                  {!inst.is_active && <Badge variant="warning">Inactive</Badge>}
+                  <Badge variant={inst.is_active ? 'success' : 'secondary'}>{inst.code}</Badge>
+                  {isSysAdmin && (
+                    <>
+                      <Button type="button" size="sm" variant="ghost" aria-label={`Edit ${inst.name}`} disabled={!isOnline} onClick={() => openEditCampus(inst)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" disabled={!isOnline || campusMutation.isPending} onClick={() => campusMutation.mutate({ inst, isActive: !inst.is_active })}>
+                        {inst.is_active ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </header>
 
               <p className="px-4 pt-3 text-sm text-slate-700" data-testid={`campus-status-${inst.code}`}>
                 {campusPeriods.length === 0
                   ? 'No enrollment period is set, so scholars can register at any time.'
                   : currentState?.accepting && current
-                    ? `Enrollment is open. ${Math.max(current.quota - currentUsed, 0)} of ${current.quota} slots left. Closes ${fmtDate(current.ends_at)}.`
+                    ? `Enrollment is open. ${Math.max(current.quota - currentUsed, 0)} of ${current.quota} slots left to confirm. Closes ${fmtDate(current.ends_at)}.`
                     : current && currentState
                       ? `Enrollment is closed right now (${currentState.label.toLowerCase()}).`
                       : 'Enrollment is closed right now. No period covers today.'}
@@ -425,7 +505,7 @@ export function InstitutionsAdminPage() {
                         <div>
                           <div className="flex items-baseline justify-between text-xs text-slate-600">
                             <span>
-                              <strong className="text-sm text-slate-900">{used}</strong> of {period.quota} slots used
+                              <strong className="text-sm text-slate-900">{used}</strong> of {period.quota} scholars confirmed
                             </span>
                             <span>{percent}%</span>
                           </div>
@@ -435,7 +515,7 @@ export function InstitutionsAdminPage() {
                             aria-valuemin={0}
                             aria-valuemax={100}
                             aria-valuenow={percent}
-                            aria-label={`${used} of ${period.quota} slots used`}
+                            aria-label={`${used} of ${period.quota} scholars confirmed`}
                           >
                             <div className={cn('h-full rounded-full', percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-teal-600')} style={{ width: `${percent}%` }} />
                           </div>
@@ -475,7 +555,7 @@ export function InstitutionsAdminPage() {
       </div>
 
       <p className="px-1 text-xs leading-relaxed text-slate-500">
-        A slot is used when a registration is submitted, verified or confirmed. Drafts and returned registrations do not use a slot. When the last slot is taken, the period closes by itself. Slots are counted using the Philippine date. A registration saved offline is checked when it reaches the server, and the scholar sees the reason in Sync Center if it is refused.
+        A slot is used when the registrar confirms a scholar. If a scholar backs out and is archived, the slot is freed. When the last slot is confirmed, the period closes by itself. The registrar cannot confirm past the quota. Slots are counted using the Philippine date. A registration saved offline is checked when it reaches the server, and the scholar sees the reason in Sync Center if it is refused.
       </p>
 
       <AppDialog
@@ -530,12 +610,60 @@ export function InstitutionsAdminPage() {
             <Label htmlFor="ip_quota">Number of slots</Label>
             <Input id="ip_quota" inputMode="numeric" value={form.quota} onChange={(e) => setForm((f) => ({ ...f, quota: e.target.value }))} className="h-11 text-base sm:h-10 sm:text-sm" />
             <p className="text-xs text-slate-500">
-              {editing ? `${usage[editing.id]?.used ?? 0} already used. ` : ''}The most scholars this period can accept in total.
+              {editing ? `${usage[editing.id]?.used ?? 0} already confirmed. ` : ''}The most scholars the registrar can confirm in this period.
             </p>
           </div>
           {formError && (
             <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-800" role="alert">
               {formError}
+            </p>
+          )}
+        </div>
+      </AppDialog>
+
+      <AppDialog
+        open={campusOpen}
+        onOpenChange={(open) => !campusMutation.isPending && setCampusOpen(open)}
+        title={editingCampus ? 'Edit campus' : 'Add campus'}
+        description={editingCampus ? undefined : 'Add a new school so it can use TESDA Connect. You can set its enrollment periods and staff afterwards.'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setCampusOpen(false)} disabled={campusMutation.isPending}>
+              Cancel
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => campusMutation.mutate(undefined)} disabled={campusMutation.isPending}>
+              {campusMutation.isPending ? 'Saving…' : editingCampus ? 'Save changes' : 'Add campus'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3.5">
+          <div className="space-y-1">
+            <Label htmlFor="campus_code">Short code</Label>
+            <Input id="campus_code" value={campusForm.code} disabled={Boolean(editingCampus)} maxLength={10} placeholder="BST" onChange={(e) => setCampusForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} className="h-11 text-base sm:h-10 sm:text-sm" />
+            <p className="text-xs text-slate-500">Used in scholar IDs, such as BST-2027-0001. It cannot be changed later.</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="campus_name">School name</Label>
+            <Input id="campus_name" value={campusForm.name} onChange={(e) => setCampusForm((f) => ({ ...f, name: e.target.value }))} className="h-11 text-base sm:h-10 sm:text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="campus_address">Address (optional)</Label>
+            <Input id="campus_address" value={campusForm.address} onChange={(e) => setCampusForm((f) => ({ ...f, address: e.target.value }))} className="h-11 text-base sm:h-10 sm:text-sm" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="campus_email">Email (optional)</Label>
+              <Input id="campus_email" type="email" value={campusForm.email} onChange={(e) => setCampusForm((f) => ({ ...f, email: e.target.value }))} className="h-11 text-base sm:h-10 sm:text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="campus_phone">Phone (optional)</Label>
+              <Input id="campus_phone" inputMode="tel" value={campusForm.phone} onChange={(e) => setCampusForm((f) => ({ ...f, phone: e.target.value }))} className="h-11 text-base sm:h-10 sm:text-sm" />
+            </div>
+          </div>
+          {campusError && (
+            <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-800" role="alert">
+              {campusError}
             </p>
           )}
         </div>

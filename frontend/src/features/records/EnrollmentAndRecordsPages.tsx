@@ -19,6 +19,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
+import { QuotaStatusPanel } from '@/features/records/QuotaStatusPanel';
+import { isConfirmBlocked } from '@/features/records/quotaStatus';
+import { useCampusQuotas } from '@/features/records/useCampusQuotas';
 import { StudentDossierDrawer, type FullTraineeRecordRow } from '@/features/records/StudentDossierDrawer';
 import { isSupabaseConfigured } from '@/lib/env';
 import { downloadMis0301Pdf } from '@/lib/forms/generateMis0301Pdf';
@@ -49,6 +52,22 @@ export function EnrollmentReviewPage() {
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'submitted' | 'verified' | 'returned' | 'confirmed'>('all');
   const [returnReason, setReturnReason] = React.useState('');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const { statuses: quotaStatuses, refetch: refetchQuotas } = useCampusQuotas();
+  const campusNames = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const i of profile?.institutions ?? []) map[i.institutionId] = `${i.name} (${i.code})`;
+    return map;
+  }, [profile?.institutions]);
+  const courseNamesQuery = useQuery<Record<string, string>>({
+    queryKey: ['course-names-for-quota'],
+    enabled: isSupabaseConfigured && quotaStatuses.some((q) => q.courses.length > 0),
+    queryFn: async () => {
+      const client = getSupabaseClient();
+      if (!client) return {};
+      const { data } = await client.from('courses').select('id, name').returns<Array<{ id: string; name: string }>>();
+      return Object.fromEntries((data ?? []).map((c) => [c.id, c.name]));
+    },
+  });
 
   const canMutate =
     profile?.role === 'registrar' ||
@@ -110,10 +129,12 @@ export function EnrollmentReviewPage() {
 
     if (rpcResponse.error) {
       toast.error(rpcResponse.error.message);
+      refetchQuotas();
       return;
     }
     toast.success(`Confirmed! Assigned Scholar ID: ${rpcResponse.data?.scholar_id ?? 'Generated'}`);
     await loadApplications();
+    refetchQuotas();
   }
 
   async function handleReturn() {
@@ -175,6 +196,8 @@ export function EnrollmentReviewPage() {
           </Button>
         ))}
       </div>
+
+      <QuotaStatusPanel statuses={quotaStatuses} campusNames={campusNames} courseNames={courseNamesQuery.data ?? {}} />
 
       {!canMutate && (
         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
@@ -256,8 +279,14 @@ export function EnrollmentReviewPage() {
                               </Button>
                             )}
                             {row.application_status === 'verified' && (
-                              <Button size="sm" variant="secondary" onClick={() => handleConfirm(row)}>
-                                Confirm Scholar
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleConfirm(row)}
+                                disabled={isConfirmBlocked(quotaStatuses, row.institution_id, row.course_id)}
+                                title={isConfirmBlocked(quotaStatuses, row.institution_id, row.course_id) ? 'The quota is full. Raise the quota or wait for a slot to free up.' : undefined}
+                              >
+                                {isConfirmBlocked(quotaStatuses, row.institution_id, row.course_id) ? 'Quota full' : 'Confirm Scholar'}
                               </Button>
                             )}
                             {row.application_status !== 'confirmed' && (

@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   FolderKanban,
   GraduationCap,
+  BarChart3,
   HelpCircle,
   KeyRound,
   LayoutDashboard,
@@ -56,6 +57,7 @@ const ICONS: Record<NavItemConfig['icon'], React.ComponentType<{ className?: str
   GraduationCap,
   UserCog,
   HelpCircle,
+  BarChart3,
 };
 
 const SECTION_LABELS: Record<NavSection, string> = {

@@ -53,6 +53,7 @@ const ReportsPage = lazyPage(() => import('@/features/reports/ReportsPage'), 'Re
 const TrainingSchedulesPage = lazyPage(() => import('@/features/schedules/TrainingSchedulesPage'), 'TrainingSchedulesPage');
 const OfflineSyncPage = lazyPage(() => import('@/features/sync/OfflineSyncPage'), 'OfflineSyncPage');
 const AdminUsersPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'AdminUsersPage');
+const TesdaOverviewPage = lazyPage(() => import('@/features/tesda/TesdaOverviewPage'), 'TesdaOverviewPage');
 const InstitutionsAdminPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'InstitutionsAdminPage');
 const SecurityAuditLogsPage = lazyPage(() => import('@/features/admin/AdminOversightPages'), 'SecurityAuditLogsPage');
 const EnrollmentReviewPage = lazyPage(() => import('@/features/records/EnrollmentAndRecordsPages'), 'EnrollmentReviewPage');
@@ -320,6 +321,9 @@ export function App() {
               <Route element={<AppLayoutFixed />}>
                 <Route element={<RoleRoute allowedRoles={[...STAFF_DASHBOARD_ROLES]} />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
+                </Route>
+                <Route element={<RoleRoute allowedRoles={['tesda_viewer', 'system_administrator']} />}>
+                  <Route path="/tesda-overview" element={<TesdaOverviewPage />} />
                 </Route>
                 <Route path="/sync" element={<OfflineSyncPage />} />
                 <Route path="/user-guide" element={<UserGuidePage />} />
