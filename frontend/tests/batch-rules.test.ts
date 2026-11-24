@@ -15,6 +15,8 @@ describe('batch code and numbers', () => {
     expect(buildBatchCode('oap', 'NC II', '2026', 1)).toBe('OAP-NCII-2026-B1');
     expect(buildBatchCode('SMAW', 'NC I', '2026-2027', 6)).toBe('SMAW-NCI-2026-2027-B6');
     expect(buildBatchCode('WLD', null, '2026', 2)).toBe('WLD-2026-B2');
+    // a course code that already ends with the level is not repeated
+    expect(buildBatchCode('OAP-NCII', 'NC II', '2026', 1)).toBe('OAP-NCII-2026-B1');
   });
 
   it('offers only batch numbers 1 to 6 that are not used yet', () => {

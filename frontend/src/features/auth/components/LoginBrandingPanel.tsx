@@ -63,29 +63,31 @@ export function LoginBrandingPanel({ initialPreset }: LoginBrandingPanelProps) {
       <div className="relative z-10 mt-auto border-t border-emerald-700/15 bg-gradient-to-r from-[#047857] via-[#059669] to-[#10B981] px-8 py-5 text-white xl:px-10">
         <div className="grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-white/20">
           <div className="flex items-start gap-3 pr-2">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white">
-              <Building2 className="h-4 w-4" aria-hidden="true" />
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700">
+              <Sprout className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-xs font-bold tracking-wide text-white">
-                Balli School of Technology (BST)
+              <p className="flex flex-wrap items-center gap-2 text-xs font-bold tracking-wide text-white">
+                Mamburao Integrated Farm (MIF)
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-700">Now enrolling</span>
               </p>
               <p className="mt-0.5 text-[11px] leading-snug text-emerald-50/90">
-                Technical-vocational training programs and competency operations
+                Organic Agriculture Production NC II: field operations, batches and progress charts
               </p>
             </div>
           </div>
 
           <div className="flex items-start gap-3 sm:pl-4">
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white">
-              <Sprout className="h-4 w-4" aria-hidden="true" />
+              <Building2 className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-xs font-bold tracking-wide text-white">
-                Mamburao Integrated Farm (MIF)
+              <p className="flex flex-wrap items-center gap-2 text-xs font-bold tracking-wide text-white">
+                Balli School of Technology (BST)
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white">Opening next year</span>
               </p>
               <p className="mt-0.5 text-[11px] leading-snug text-emerald-50/90">
-                Agricultural training programs, field operations, and production activities
+                Shielded Metal Arc Welding NC II, coming soon
               </p>
             </div>
           </div>

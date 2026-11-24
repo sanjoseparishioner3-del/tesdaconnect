@@ -224,18 +224,6 @@ async function seedBaselineOfflineCachesForUser(profile: UserProfile): Promise<v
           syncedAt: nowIso,
         },
         {
-          id: 'ebf29bdb-5804-4b99-a3bb-4df3348fe077',
-          userId,
-          institutionId: BST_INSTITUTION.institutionId,
-          code: 'AUTO-NCII',
-          name: 'Automotive Servicing NC II',
-          qualificationLevel: 'NC II',
-          trainingHours: 676,
-          isActive: true,
-          archivedAt: null,
-          syncedAt: nowIso,
-        },
-        {
           id: '9d9b3104-7f7f-4344-aa36-34b3e237c212',
           userId,
           institutionId: MIF_INSTITUTION.institutionId,

@@ -45,9 +45,9 @@ export const HERO_PRESETS: Record<HeroPresetKey, PresetDashboardSpec> = {
     shortLabel: 'BST Campus',
     institutionTag: 'BST · Tech-Voc Operations',
     headline: 'Balli School of Technology',
-    subline: 'Welding, Automotive Servicing, and laboratory batch coordination in Occidental Mindoro.',
+    subline: 'Shielded Metal Arc Welding NC II and workshop batch coordination, opening next year in Occidental Mindoro.',
     kpis: [
-      { label: 'Programs', value: 'SMAW · Auto', delta: 'NC II qualifications' },
+      { label: 'Programs', value: 'SMAW', delta: 'NC II qualification' },
       { label: 'Registration', value: 'MIS 03-01', delta: 'Digital intake' },
       { label: 'ULI', value: 'Registrar', delta: 'Encoded after confirmation' },
       { label: 'Documents', value: 'Checklist', delta: 'Verified by registrar' },

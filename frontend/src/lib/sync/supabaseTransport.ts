@@ -80,13 +80,13 @@ export const supabaseSyncTransport: SyncTransportHandler = async (mutation) => {
     if (!uuidPattern.test(instId)) {
       const userProfile = useAuthStore.getState().profile;
       const matchedProfileInst = userProfile?.institutions?.find(
-        (i) => i.code.toUpperCase() === (instId || 'BST').toUpperCase() || i.institutionId === instId,
+        (i) => i.code.toUpperCase() === (instId || 'MIF').toUpperCase() || i.institutionId === instId,
       );
       if (matchedProfileInst?.institutionId && uuidPattern.test(matchedProfileInst.institutionId)) {
         instId = matchedProfileInst.institutionId;
       } else {
         try {
-          const lookupCode = instId ? instId.toUpperCase() : 'BST';
+          const lookupCode = instId ? instId.toUpperCase() : 'MIF';
           const { data: instRow } = await client
             .from('institutions')
             .select('id')

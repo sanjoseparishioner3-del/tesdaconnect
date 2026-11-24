@@ -4,7 +4,10 @@ export const MAX_BATCHES_PER_COURSE_YEAR = 6;
 /** Same format the database builds: OAP-NCII-2026-B1 (course code, NC level, school year, batch number). */
 export function buildBatchCode(courseCode: string, qualificationLevel: string | null | undefined, schoolYear: string, batchNumber: number): string {
   const level = (qualificationLevel ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return `${courseCode.toUpperCase()}${level ? `-${level}` : ''}-${schoolYear}-B${batchNumber}`;
+  const code = courseCode.toUpperCase();
+  // A course code that already ends with the level (for example OAP-NCII) is not repeated.
+  const withLevel = level && !code.replace(/[^A-Z0-9]/g, '').endsWith(level) ? `${code}-${level}` : code;
+  return `${withLevel}-${schoolYear}-B${batchNumber}`;
 }
 
 export function currentSchoolYear(now: Date = new Date()): string {

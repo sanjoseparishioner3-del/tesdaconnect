@@ -25,7 +25,7 @@ const GALLERY_ITEMS = [
   { src: '/images/landing/tesda-welding-workshop.jpg', title: 'Welding (SMAW) workshop', caption: 'Competency checks and progress tracking for trainees.' },
   { src: '/images/landing/tesda-organic-farm.jpg', title: 'Mamburao Integrated Farm', caption: 'Field schedules and progress charts for agriculture programs.' },
   { src: '/images/landing/tesda-digital-lab.jpg', title: 'Digital and assessment labs', caption: 'Work saved on the device and sent when you are back online.' },
-  { src: '/images/landing/tesda-automotive-shop.jpg', title: 'Automotive servicing', caption: 'Batch schedules and practical assessments.' },
+  { src: '/images/landing/tesda-automotive-shop.jpg', title: 'Technical workshop', caption: 'Batch schedules and practical assessments.' },
   { src: '/images/landing/tesda-organic-crops.jpg', title: 'Organic agriculture', caption: 'Crop module tasks verified by Focal Persons.' },
   { src: '/images/landing/tesda-plumbing-assessment.jpg', title: 'Trade assessments', caption: 'Unit reviews toward qualification readiness.' },
   { src: '/images/landing/tesda-vr-welding-lab.jpg', title: 'Simulation and modern labs', caption: 'Safe practice before live workshop testing.' },
@@ -146,18 +146,18 @@ export function LandingPage() {
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 {[
                   {
-                    icon: Building2,
-                    tag: 'BST · Tech-Voc',
-                    name: 'Balli School of Technology',
-                    text: 'Welding (SMAW NC II) and Automotive Servicing, with workshop schedules and registrar records.',
-                    points: ['Digital MIS 03-01 registration', 'Document checklist and review', 'Batch scheduling'],
-                  },
-                  {
                     icon: GraduationCap,
-                    tag: 'MIF · Agriculture',
+                    tag: 'MIF · Now enrolling',
                     name: 'Mamburao Integrated Farm',
                     text: 'Organic Agriculture Production NC II, with field schedules that work offline.',
                     points: ['Progress and achievement charts', 'Offline field schedules', 'Digital scholar ID'],
+                  },
+                  {
+                    icon: Building2,
+                    tag: 'BST · Opening next year',
+                    name: 'Balli School of Technology',
+                    text: 'Shielded Metal Arc Welding NC II is coming soon, with workshop schedules and registrar records.',
+                    points: ['Digital MIS 03-01 registration', 'Document checklist and review', 'Batch scheduling'],
                   },
                 ].map((c) => (
                   <article key={c.name} className="reveal rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

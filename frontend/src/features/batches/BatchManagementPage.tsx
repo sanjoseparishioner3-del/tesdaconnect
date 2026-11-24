@@ -473,7 +473,7 @@ export function BatchManagementPage() {
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
-                  {c.qualification_level ? ` (${c.qualification_level})` : ''}
+                  {c.qualification_level && !c.name.toUpperCase().replace(/\s/g, '').includes(c.qualification_level.toUpperCase().replace(/\s/g, '')) ? ` (${c.qualification_level})` : ''}
                   {campusById.get(c.institution_id) ? ` - ${campusById.get(c.institution_id)?.code}` : ''}
                 </option>
               ))}

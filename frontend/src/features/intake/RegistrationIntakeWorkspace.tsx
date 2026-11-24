@@ -49,6 +49,7 @@ import { triggerForegroundSync } from '@/lib/sync/supabaseTransport';
 import { asText, formatShortDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
+import { defaultCampus, loadCampuses, type CampusRow } from '@/lib/campuses';
 import { EnrollmentWindowBanner } from './EnrollmentWindowBanner';
 
 const STEPS = [
@@ -59,11 +60,7 @@ const STEPS = [
   'MIS 03-01 Form & PDF',
 ];
 
-interface InstitutionOption {
-  id: string;
-  code: string;
-  name: string;
-}
+type InstitutionOption = Pick<CampusRow, 'id' | 'code' | 'name' | 'operating_status' | 'display_order'>;
 
 interface CourseOption {
   id: string;
@@ -196,11 +193,12 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
 
       if (isOnline && isSupabaseConfigured && client) {
         const [instRes, courseRes] = await Promise.all([
-          client.from('institutions').select('id, code, name').order('code').returns<InstitutionOption[]>(),
+          loadCampuses(client),
           client
             .from('courses')
             .select('id, institution_id, code, name')
             .is('archived_at', null)
+            .eq('is_active', true)
             .order('code')
             .returns<CourseOption[]>(),
         ]);
@@ -209,7 +207,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
           const currentInst = form.getValues('institution_id');
           const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (!currentInst || currentInst === 'BST' || !uuidPattern.test(currentInst)) {
-            const matched = instRes.data.find((i) => i.code.toUpperCase() === 'BST') ?? instRes.data[0];
+            const matched = defaultCampus(instRes.data);
             if (matched) {
               form.setValue('institution_id', matched.id, { shouldValidate: true });
             }
@@ -442,7 +440,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
     if (!uuidPattern.test(resolvedInstId)) {
       const matchCandidate =
         institutions.find(
-          (i) => i.code.toUpperCase() === (resolvedInstId || 'BST').toUpperCase() || i.id === resolvedInstId,
+          (i) => i.code.toUpperCase() === (resolvedInstId || defaultCampus(institutions)?.code || 'MIF').toUpperCase() || i.id === resolvedInstId,
         ) ??
         institutions[0] ??
         profile?.institutions?.[0];
@@ -1053,6 +1051,7 @@ export function RegistrationIntakeWorkspace({ embedded = false }: { embedded?: b
                         {institutions.map((inst) => (
                           <option key={inst.id} value={inst.id}>
                             {inst.code} — {inst.name}
+                            {inst.operating_status === 'upcoming' ? ' (opening next year)' : ''}
                           </option>
                         ))}
                       </select>

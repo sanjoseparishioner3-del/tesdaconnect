@@ -12,6 +12,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
+import { CAMPUS_STATUS_LABEL, loadCampuses, type CampusRow } from '@/lib/campuses';
 import { validateCampusForm } from './campuses';
 import {
   friendlyPeriodError,
@@ -23,15 +24,12 @@ import {
   type PeriodStateKey,
 } from './intakePeriods';
 
-interface InstitutionRow {
-  id: string;
-  code: string;
-  name: string;
+type InstitutionRow = CampusRow & {
   address: string | null;
   contact_email: string | null;
   contact_number: string | null;
   is_active: boolean;
-}
+};
 
 interface PeriodRow {
   id: string;
@@ -110,13 +108,9 @@ export function InstitutionsAdminPage() {
     queryFn: async () => {
       const client = getSupabaseClient();
       if (!client) return [];
-      const { data, error } = await client
-        .from('institutions')
-        .select('id, code, name, address, contact_email, contact_number, is_active')
-        .order('code', { ascending: true })
-        .returns<InstitutionRow[]>();
-      if (error) throw new Error(error.message);
-      return data ?? [];
+      const { data, error } = await loadCampuses(client);
+      if (error) throw new Error(error);
+      return data as InstitutionRow[];
     },
   });
 
@@ -456,6 +450,17 @@ export function InstitutionsAdminPage() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!inst.is_active && <Badge variant="warning">Inactive</Badge>}
+                  {inst.operating_status && (
+                    <span
+                      className={
+                        inst.operating_status === 'active'
+                          ? 'rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-semibold text-white'
+                          : 'rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-200'
+                      }
+                    >
+                      {CAMPUS_STATUS_LABEL[inst.operating_status]}
+                    </span>
+                  )}
                   <Badge variant={inst.is_active ? 'success' : 'secondary'}>{inst.code}</Badge>
                   {isSysAdmin && (
                     <>
