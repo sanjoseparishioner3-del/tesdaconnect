@@ -1,11 +1,10 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, Eye, FileCheck2, Lock, Plus, Settings2 } from 'lucide-react';
+import { CheckSquare, ChevronDown, Eye, FileCheck2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { offlineDb, safeDexieWrite } from '@/lib/db/dexie';
@@ -15,6 +14,16 @@ import { enqueueMutation } from '@/lib/sync/syncEngine';
 import { asText } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectivityStore } from '@/stores/connectivityStore';
+import { ChartSetupPanel } from './ChartSetupPanel';
+import {
+  chartProgress,
+  FALLBACK_CHARTS,
+  TASK_STATUS_LABEL,
+  tasksForUnit,
+  unitsForChart,
+  type ChartLite,
+  type TaskStatus,
+} from './chartModel';
 
 interface BatchOption {
   id: string;
@@ -37,12 +46,13 @@ interface CompetencyUnitRow {
   name: string;
   sort_order: number;
   is_archived: boolean;
+  chart_id?: string | null;
 }
 
 interface CompetencyTaskRow {
   id: string;
   competency_unit_id: string;
-  chart_type: 'progress' | 'achievement';
+  chart_type: string;
   task_number: number;
   name: string;
 }
@@ -50,7 +60,7 @@ interface CompetencyTaskRow {
 interface ProgressRow {
   enrollment_application_id: string;
   competency_task_id: string;
-  status: 'competent' | 'not_yet_competent' | 'not_assessed';
+  status: TaskStatus;
 }
 
 interface ReportSubmissionRow {
@@ -70,16 +80,10 @@ export function CompetencyAndAttendancePage() {
   const canManageCharts = profile?.role === 'focal_person';
 
   const [activeTab, setActiveTab] = React.useState<'competency' | 'setup' | 'workflow'>('competency');
-  const [chartFilter, setChartFilter] = React.useState<'all' | 'progress' | 'achievement'>('all');
   const [selectedBatchId, setSelectedBatchId] = React.useState('');
   const [selectedScholarKey, setSelectedScholarKey] = React.useState('');
-
-  const [unitNumber, setUnitNumber] = React.useState('1');
-  const [unitName, setUnitName] = React.useState('');
-  const [selectedUnitId, setSelectedUnitId] = React.useState('');
-  const [taskChartType, setTaskChartType] = React.useState<'progress' | 'achievement'>('progress');
-  const [taskNumber, setTaskNumber] = React.useState('1');
-  const [taskName, setTaskName] = React.useState('');
+  const [chartKey, setChartKey] = React.useState('');
+  const [openScholarId, setOpenScholarId] = React.useState('');
 
   const batchesQuery = useQuery<BatchOption[]>({
     queryKey: ['ops-batches', profile?.id, isOnline],
@@ -100,13 +104,16 @@ export function CompetencyAndAttendancePage() {
           course_id: asText(r.payload.course_id),
         }));
       }
-      const { data, error } = await client
+      let query = client
         .from('training_batches')
         .select('id, code, name, course_id')
         .is('archived_at', null)
-        .order('starts_at', { ascending: false })
-        .limit(30)
-        .returns<BatchOption[]>();
+        .in('status', ['upcoming', 'in_training']);
+      const campusIds = (profile?.institutions ?? []).map((i) => i.institutionId);
+      if (profile?.role !== 'system_administrator' && campusIds.length > 0) {
+        query = query.in('institution_id', campusIds);
+      }
+      const { data, error } = await query.order('starts_at', { ascending: false }).limit(30).returns<BatchOption[]>();
       if (error) throw new Error(error.message);
       return data ?? [];
     },
@@ -168,12 +175,13 @@ export function CompetencyAndAttendancePage() {
             name: asText(r.payload.name),
             sort_order: Number(r.payload.sort_order ?? 1),
             is_archived: Boolean(r.payload.is_archived),
+            chart_id: typeof r.payload.chart_id === 'string' ? r.payload.chart_id : null,
           }))
           .sort((a, b) => a.unit_number - b.unit_number);
       }
       const { data, error } = await client
         .from('competency_units')
-        .select('id, course_id, unit_number, name, sort_order, is_archived')
+        .select('id, course_id, unit_number, name, sort_order, is_archived, chart_id')
         .eq('course_id', activeBatch.course_id)
         .eq('is_archived', false)
         .order('unit_number', { ascending: true })
@@ -202,7 +210,7 @@ export function CompetencyAndAttendancePage() {
           .map((r) => ({
             id: asText(r.payload.id, r.entityId),
             competency_unit_id: asText(r.payload.competency_unit_id),
-            chart_type: (r.payload.chart_type as 'progress' | 'achievement') ?? 'progress',
+            chart_type: typeof r.payload.chart_type === 'string' ? r.payload.chart_type : 'progress',
             task_number: Number(r.payload.task_number ?? 1),
             name: asText(r.payload.name),
           }))
@@ -216,6 +224,24 @@ export function CompetencyAndAttendancePage() {
         .limit(100)
         .returns<CompetencyTaskRow[]>();
       if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+
+  const chartsQuery = useQuery<ChartLite[]>({
+    queryKey: ['course-charts', activeBatch?.course_id, isOnline],
+    enabled: Boolean(activeBatch?.course_id) && isOnline && isSupabaseConfigured,
+    queryFn: async () => {
+      const client = getSupabaseClient();
+      if (!client || !activeBatch?.course_id) return [];
+      const { data, error } = await client
+        .from('competency_charts')
+        .select('id, name, kind')
+        .eq('course_id', activeBatch.course_id)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .returns<ChartLite[]>();
+      if (error) return [];
       return data ?? [];
     },
   });
@@ -284,54 +310,6 @@ export function CompetencyAndAttendancePage() {
     },
   });
 
-  const createUnitMutation = useMutation({
-    mutationFn: async () => {
-      if (!canManageCharts) throw new Error('Only Focal Person may configure competency units.');
-      const client = getSupabaseClient();
-      if (!client || !activeBatch?.course_id) throw new Error('Select a training batch first.');
-      if (unitName.trim().length < 2) throw new Error('Provide a competency unit name.');
-      const num = Math.max(1, Number.parseInt(unitNumber, 10) || 1);
-      const { error } = await client.from('competency_units').insert({
-        course_id: activeBatch.course_id,
-        unit_number: num,
-        name: unitName.trim(),
-        sort_order: num,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success('Added competency unit.');
-      setUnitName('');
-      await queryClient.invalidateQueries({ queryKey: ['course-units'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const createTaskMutation = useMutation({
-    mutationFn: async () => {
-      if (!canManageCharts) throw new Error('Only Focal Person may add Progress/Achievement chart tasks.');
-      const client = getSupabaseClient();
-      const targetUnitId = selectedUnitId || unitsQuery.data?.[0]?.id;
-      if (!client || !targetUnitId) throw new Error('Select a competency unit first.');
-      if (taskName.trim().length < 2) throw new Error('Provide a task description.');
-      const num = Math.max(1, Number.parseInt(taskNumber, 10) || 1);
-      const { error } = await client.from('competency_tasks').insert({
-        competency_unit_id: targetUnitId,
-        chart_type: taskChartType,
-        task_number: num,
-        name: taskName.trim(),
-        sort_order: num,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success('Added Progress / Achievement task.');
-      setTaskName('');
-      await queryClient.invalidateQueries({ queryKey: ['course-tasks'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
   const lockUnitReviewMutation = useMutation({
     mutationFn: async ({ enrollmentId, unitId }: { enrollmentId: string; unitId: string }) => {
       if (!canManageCharts) throw new Error('Only Focal Person may verify and lock competency units.');
@@ -395,7 +373,7 @@ export function CompetencyAndAttendancePage() {
     }: {
       enrollmentId: string;
       taskId: string;
-      status: 'competent' | 'not_yet_competent' | 'not_assessed';
+      status: TaskStatus;
     }) => {
       if (!canManageCharts) throw new Error('Only Focal Person may score scholar Progress & Achievement tasks.');
       if (!profile) throw new Error('Authenticated user required.');
@@ -488,10 +466,11 @@ export function CompetencyAndAttendancePage() {
     initialPageSize: 10,
   });
   const pagedScholars = scholars.slice(scholarsPagination.startIndex, scholarsPagination.endIndex);
-  const units = unitsQuery.data ?? [];
-  const visibleTasks = (tasksQuery.data ?? []).filter(
-    (t) => chartFilter === 'all' || t.chart_type === chartFilter,
-  );
+  const units = React.useMemo(() => unitsQuery.data ?? [], [unitsQuery.data]);
+  const allTasks = React.useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const charts: ChartLite[] = (chartsQuery.data ?? []).length > 0 ? (chartsQuery.data ?? []) : FALLBACK_CHARTS;
+  const activeChart = charts.find((c) => c.id === chartKey) ?? charts[0] ?? null;
+  const chartUnits = unitsForChart(units, allTasks, activeChart);
   const progressMap = React.useMemo(() => {
     const map = new Map<string, ProgressRow['status']>();
     for (const r of progressMatrixQuery.data ?? []) {
@@ -572,19 +551,20 @@ export function CompetencyAndAttendancePage() {
             </select>
           </div>
           {activeTab === 'competency' && (
-            <div className="flex gap-1.5">
-              {(['all', 'progress', 'achievement'] as const).map((f) => (
-                <Button
-                  key={f}
-                  type="button"
-                  size="sm"
-                  variant={chartFilter === f ? 'secondary' : 'outline'}
-                  onClick={() => setChartFilter(f)}
-                  className="capitalize"
-                >
-                  {f === 'all' ? 'All Tasks' : `${f} Chart`}
-                </Button>
-              ))}
+            <div className="min-w-[200px] max-w-xs flex-1 space-y-1">
+              <Label htmlFor="chart_select">Chart</Label>
+              <select
+                id="chart_select"
+                value={activeChart?.id ?? ''}
+                onChange={(e) => setChartKey(e.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                {charts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -595,9 +575,9 @@ export function CompetencyAndAttendancePage() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <CardTitle>Scholar Progress &amp; Achievement Tasks</CardTitle>
+                <CardTitle>Class List &amp; Task Scoring</CardTitle>
                 <CardDescription>
-                  Click tasks to mark <strong>Competent</strong> vs <strong>Not Yet Competent</strong> (PostgreSQL trigger prevents edits after unit lock).
+                  Tap a scholar to see their units and tasks right below their name, then mark each task. Marks cannot be changed after a unit is locked.
                 </CardDescription>
               </div>
               <Badge variant="info">
@@ -605,227 +585,120 @@ export function CompetencyAndAttendancePage() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-slate-600">
-            {scholars.length === 0 || visibleTasks.length === 0 ? (
+          <CardContent className="space-y-3 text-sm text-slate-600">
+            {scholars.length === 0 ? (
+              <p>No confirmed scholars in this batch yet. Scholars are placed in a batch when the Registrar confirms them.</p>
+            ) : chartUnits.length === 0 ? (
               <p>
-                Select an active batch with confirmed scholars and configured competency tasks. Focal Persons add tasks under <strong>Configure Tasks &amp; Units</strong>.
+                {activeChart?.name ?? 'This chart'} has no units and tasks yet. The Focal Person adds them under <strong>Configure Tasks &amp; Units</strong>.
               </p>
             ) : (
-              <>
-                <div className="space-y-3">
-                {pagedScholars.map((scholar) => {
-                  const totalTasks = visibleTasks.length;
-                  const competentCount = visibleTasks.filter(
-                    (t) => progressMap.get(`${scholar.id}:${t.id}`) === 'competent',
-                  ).length;
-
+              <ul className="space-y-2" aria-label="Scholars in this batch">
+                {scholars.map((scholar) => {
+                  const isOpen = openScholarId === scholar.id;
+                  const statusOf = (taskId: string): TaskStatus => progressMap.get(`${scholar.id}:${taskId}`) ?? 'not_assessed';
+                  const chartTasks = chartUnits.flatMap((u) => tasksForUnit(allTasks, u.id));
+                  const { done, total } = chartProgress(chartTasks, statusOf);
                   return (
-                    <div key={scholar.id} className="rounded-xl border border-slate-200 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-slate-900">
-                            {scholar.learner_name}{' '}
-                            <span className="font-mono text-xs text-slate-500">
-                              ({scholar.scholar_id ?? scholar.reference_no})
-                            </span>
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Completed Tasks: {competentCount} / {totalTasks}
-                          </p>
+                    <li key={scholar.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setOpenScholarId(isOpen ? '' : scholar.id)}
+                        className="flex min-h-14 w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-slate-900">{scholar.learner_name}</span>
+                          <span className="block font-mono text-xs text-slate-500">{scholar.scholar_id ?? scholar.reference_no}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
+                          <span>
+                            {done} / {total} tasks
+                          </span>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="space-y-4 border-t border-slate-100 bg-slate-50/60 p-3.5">
+                          {chartUnits.map((unit) => {
+                            const unitTasks = tasksForUnit(allTasks, unit.id);
+                            return (
+                              <section key={unit.id} aria-label={`Unit ${unit.unit_number}`} className="space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <h4 className="text-sm font-semibold text-slate-900">
+                                    Unit {unit.unit_number}: {unit.name}
+                                  </h4>
+                                  {canManageCharts && (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => lockUnitReviewMutation.mutate({ enrollmentId: scholar.id, unitId: unit.id })}
+                                    >
+                                      <Lock className="h-3 w-3" /> Lock unit
+                                    </Button>
+                                  )}
+                                </div>
+                                {unitTasks.length === 0 ? (
+                                  <p className="text-xs text-slate-500">No tasks in this unit yet.</p>
+                                ) : (
+                                  <ul className="space-y-2">
+                                    {unitTasks.map((task) => {
+                                      const current = statusOf(task.id);
+                                      return (
+                                        <li key={task.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                                          <p className="text-sm text-slate-900">
+                                            <span className="mr-1.5 font-semibold text-teal-800">T{task.task_number}</span>
+                                            {task.name}
+                                          </p>
+                                          {canManageCharts ? (
+                                            <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Result for task ${task.task_number}`}>
+                                              {(['output_correct', 'competent', 'not_yet_competent'] as const).map((status) => (
+                                                <Button
+                                                  key={status}
+                                                  type="button"
+                                                  size="sm"
+                                                  aria-pressed={current === status}
+                                                  variant={current === status ? (status === 'not_yet_competent' ? 'destructive' : 'secondary') : 'outline'}
+                                                  onClick={() =>
+                                                    markCompetencyMutation.mutate({
+                                                      enrollmentId: scholar.id,
+                                                      taskId: task.id,
+                                                      status: current === status ? 'not_assessed' : status,
+                                                    })
+                                                  }
+                                                >
+                                                  {TASK_STATUS_LABEL[status]}
+                                                </Button>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <Badge variant={current === 'not_yet_competent' ? 'warning' : current === 'not_assessed' ? 'outline' : 'success'}>
+                                              {TASK_STATUS_LABEL[current]}
+                                            </Badge>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </section>
+                            );
+                          })}
                         </div>
-
-                        {canManageCharts && units[0] && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {units.map((u) => (
-                              <Button
-                                key={u.id}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => lockUnitReviewMutation.mutate({ enrollmentId: scholar.id, unitId: u.id })}
-                              >
-                                <Lock className="h-3 w-3" /> Lock Unit {u.unit_number}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {visibleTasks.map((task) => {
-                          const currentStatus = progressMap.get(`${scholar.id}:${task.id}`) ?? 'not_assessed';
-                          const nextStatus =
-                            currentStatus === 'not_assessed'
-                              ? 'competent'
-                              : currentStatus === 'competent'
-                                ? 'not_yet_competent'
-                                : 'not_assessed';
-
-                          return (
-                            <div
-                              key={task.id}
-                              className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
-                            >
-                              <div className="min-w-0">
-                                <span className="font-semibold uppercase text-teal-800">
-                                  [{task.chart_type}] T{task.task_number}
-                                </span>
-                                <p className="truncate font-medium text-slate-900" title={task.name}>
-                                  {task.name}
-                                </p>
-                              </div>
-                              {canManageCharts ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={
-                                    currentStatus === 'competent'
-                                      ? 'secondary'
-                                      : currentStatus === 'not_yet_competent'
-                                        ? 'destructive'
-                                        : 'outline'
-                                  }
-                                  onClick={() =>
-                                    markCompetencyMutation.mutate({
-                                      enrollmentId: scholar.id,
-                                      taskId: task.id,
-                                      status: nextStatus,
-                                    })
-                                  }
-                                >
-                                  {currentStatus === 'competent'
-                                    ? 'Competent'
-                                    : currentStatus === 'not_yet_competent'
-                                      ? 'NYC'
-                                      : 'Assess'}
-                                </Button>
-                              ) : (
-                                <Badge
-                                  variant={
-                                    currentStatus === 'competent'
-                                      ? 'success'
-                                      : currentStatus === 'not_yet_competent'
-                                        ? 'warning'
-                                        : 'outline'
-                                  }
-                                >
-                                  {currentStatus.replace(/_/g, ' ')}
-                                </Badge>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                      )}
+                    </li>
                   );
                 })}
-              </div>
-
-              <div className="mt-4 border-t border-slate-100 pt-4">
-                <Pagination
-                  currentPage={scholarsPagination.currentPage}
-                  totalPages={scholarsPagination.totalPages}
-                  totalRecords={scholars.length}
-                  pageSize={scholarsPagination.pageSize}
-                  onPageChange={scholarsPagination.goToPage}
-                  onPageSizeChange={scholarsPagination.setPageSize}
-                />
-              </div>
-            </>
-          )}
+              </ul>
+            )}
           </CardContent>
         </Card>
       )}
 
       {activeTab === 'setup' && canManageCharts && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Settings2 className="h-4 w-4 text-teal-700" /> Configure Units &amp; Tasks (Focal Person Only)
-              </CardTitle>
-              <CardDescription>
-                Define competency units and structured Progress / Achievement chart tasks for this qualification.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">Add Competency Unit</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="unit_num">Unit No.</Label>
-                    <Input id="unit_num" type="number" min={1} value={unitNumber} onChange={(e) => setUnitNumber(e.target.value)} />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label htmlFor="unit_name">Unit Title</Label>
-                    <Input id="unit_name" value={unitName} onChange={(e) => setUnitName(e.target.value)} placeholder="Participate in workplace communication" />
-                  </div>
-                </div>
-                <Button type="button" size="sm" variant="secondary" disabled={createUnitMutation.isPending || !activeBatch} onClick={() => createUnitMutation.mutate()}>
-                  <Plus className="h-3.5 w-3.5" /> Add Unit
-                </Button>
-              </div>
-
-              <div className="space-y-2 rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">Add Progress / Achievement Task</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <select
-                    value={selectedUnitId || units[0]?.id || ''}
-                    onChange={(e) => setSelectedUnitId(e.target.value)}
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        Unit {u.unit_number}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={taskChartType}
-                    onChange={(e) => setTaskChartType(e.target.value as 'progress' | 'achievement')}
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs"
-                  >
-                    <option value="progress">Progress Chart Task</option>
-                    <option value="achievement">Achievement Chart Task</option>
-                  </select>
-                  <Input type="number" min={1} value={taskNumber} onChange={(e) => setTaskNumber(e.target.value)} placeholder="Task No." />
-                </div>
-                <Input value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Task / learning outcome description" />
-                <Button type="button" size="sm" variant="secondary" disabled={createTaskMutation.isPending || units.length === 0} onClick={() => createTaskMutation.mutate()}>
-                  <Plus className="h-3.5 w-3.5" /> Add Task
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Course Units ({units.length}) &amp; Tasks ({(tasksQuery.data ?? []).length})</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {units.length === 0 ? (
-                <p className="text-slate-500">No competency units configured for the selected batch course yet.</p>
-              ) : (
-                units.map((u) => (
-                  <div key={u.id} className="rounded-lg border border-slate-200 p-3">
-                    <p className="font-semibold text-slate-900">
-                      Unit {u.unit_number}: {u.name}
-                    </p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                      {(tasksQuery.data ?? [])
-                        .filter((t) => t.competency_unit_id === u.id)
-                        .map((t) => (
-                          <li key={t.id}>
-                            [{t.chart_type.toUpperCase()}] Task {t.task_number}: {t.name}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <ChartSetupPanel courseId={activeBatch?.course_id ?? null} courseLabel={activeBatch ? `${activeBatch.code} - ${activeBatch.name}` : 'No batch selected'} />
       )}
 
       {activeTab === 'workflow' && (
